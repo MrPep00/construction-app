@@ -197,12 +197,12 @@ declare
   floor_labels text[] := array[
     'Piwnica -2', 'Piwnica -1', 'Parter',
     'Piętro 1', 'Piętro 2', 'Piętro 3',
-    'Piętro 4', 'Piętro 5', 'Dach / Piętro 6'
+    'Piętro 4', 'Piętro 5', 'Piętro 6', 'Dach'
   ];
-  floor_levels int[]  := array[-2, -1, 0, 1, 2, 3, 4, 5, 6];
+  floor_levels int[]  := array[-2, -1, 0, 1, 2, 3, 4, 5, 6, 7];
   i int;
 begin
-  for i in 1..9 loop
+  for i in 1..10 loop
     insert into floors (project_id, level, label)
     values (new.id, floor_levels[i], floor_labels[i]);
   end loop;
