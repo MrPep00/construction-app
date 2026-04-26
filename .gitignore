@@ -43,3 +43,4 @@ next-env.d.ts
 # project docs (contain internal planning info)
 CLAUDE.md
 DECISIONS.md
+PROMPTS.md
