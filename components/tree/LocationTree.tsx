@@ -31,9 +31,10 @@ interface Props {
   locations: LocationRow[]
   projectId: string
   floorLevel: number
+  openIssueCounts?: Record<string, number>
 }
 
-export function LocationTree({ locations, projectId, floorLevel }: Props) {
+export function LocationTree({ locations, projectId, floorLevel, openIssueCounts }: Props) {
   // Default: tenant_changes expanded, branches collapsed
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     const initial = new Set<string>()
@@ -71,6 +72,7 @@ export function LocationTree({ locations, projectId, floorLevel }: Props) {
         onDialog={setActiveDialog}
         projectId={projectId}
         floorLevel={floorLevel}
+        openIssueCount={openIssueCounts?.[node.id] ?? 0}
       >
         {node.children.map((child) => renderNode(child, depth + 1))}
       </LocationNode>

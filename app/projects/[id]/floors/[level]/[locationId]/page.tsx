@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server"
 import { TYPE_ICONS } from "@/components/tree/LocationNode"
 import { FileUploader } from "@/components/upload/FileUploader"
 import { FileGrid } from "@/components/upload/FileGrid"
+import { IssueList } from "@/components/issues/IssueList"
+import { NewIssueButton } from "@/components/issues/NewIssueButton"
 
 export default async function LocationPage({
   params,
@@ -136,6 +138,14 @@ export default async function LocationPage({
         <div className="mt-6">
           <FileGrid locationId={locationId} />
         </div>
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium text-muted-foreground">Usterki</h2>
+          <NewIssueButton locationId={locationId} />
+        </div>
+        <IssueList locationId={locationId} />
       </section>
     </main>
   )

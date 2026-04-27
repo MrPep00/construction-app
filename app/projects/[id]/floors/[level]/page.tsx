@@ -2,6 +2,9 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { LocationTree } from "@/components/tree/LocationTree"
+import { TaskList } from "@/components/tasks/TaskList"
+import { NotesPanel } from "@/components/notes/NotesPanel"
+import { FloorTabs } from "@/components/FloorTabs"
 
 export default async function FloorPage({
   params,
@@ -38,6 +41,22 @@ export default async function FloorPage({
     .eq("floor_id", floor.id)
     .order("sort_order")
 
+  const locationIds = locations?.map((l) => l.id) ?? []
+  const openIssueCounts: Record<string, number> = {}
+
+  if (locationIds.length > 0) {
+    const { data: openIssues } = await supabase
+      .from("issues")
+      .select("location_id")
+      .eq("status", "open")
+      .in("location_id", locationIds)
+
+    openIssues?.forEach((issue) => {
+      openIssueCounts[issue.location_id] =
+        (openIssueCounts[issue.location_id] ?? 0) + 1
+    })
+  }
+
   return (
     <main className="container mx-auto max-w-3xl px-4 py-6">
       <nav className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -54,10 +73,17 @@ export default async function FloorPage({
 
       <h1 className="mb-6 text-2xl font-bold">{floor.label}</h1>
 
-      <LocationTree
-        locations={locations ?? []}
-        projectId={id}
-        floorLevel={level}
+      <FloorTabs
+        tree={
+          <LocationTree
+            locations={locations ?? []}
+            projectId={id}
+            floorLevel={level}
+            openIssueCounts={openIssueCounts}
+          />
+        }
+        tasks={<TaskList projectId={id} floorId={floor.id} />}
+        notes={<NotesPanel projectId={id} floorId={floor.id} />}
       />
     </main>
   )

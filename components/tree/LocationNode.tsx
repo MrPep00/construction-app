@@ -33,6 +33,7 @@ interface Props {
   onDialog: (mode: DialogMode) => void
   projectId: string
   floorLevel: number
+  openIssueCount?: number
   children?: React.ReactNode
 }
 
@@ -44,6 +45,7 @@ export function LocationNode({
   onDialog,
   projectId,
   floorLevel,
+  openIssueCount = 0,
   children,
 }: Props) {
   const isLocked =
@@ -91,9 +93,14 @@ export function LocationNode({
         {/* Name link */}
         <Link
           href={`/projects/${projectId}/floors/${floorLevel}/${node.id}`}
-          className="min-w-0 flex-1 truncate py-2 text-sm font-medium hover:text-primary md:py-0"
+          className="flex min-w-0 flex-1 items-center gap-1.5 truncate py-2 text-sm font-medium hover:text-primary md:py-0"
         >
-          {node.name}
+          <span className="truncate">{node.name}</span>
+          {openIssueCount > 0 && (
+            <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+              {openIssueCount}
+            </span>
+          )}
         </Link>
 
         {/* Actions */}
