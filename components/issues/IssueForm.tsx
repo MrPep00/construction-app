@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -11,72 +12,69 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { createIssue, updateIssue } from "@/lib/actions/issues"
-import type { IssueSeverity } from "@/lib/types/db"
+import { uploadIssuePhoto } from "@/lib/actions/files"
+import type { IssueRow } from "./IssueListClient"
 
 type CreateMode = { mode: "create"; locationId: string }
-type EditMode = {
-  mode: "edit"
-  issue: {
-    id: string
-    title: string
-    description: string | null
-    severity: IssueSeverity
-  }
-}
+type EditMode = { mode: "edit"; issue: IssueRow; locationId: string }
 
 type Props = (CreateMode | EditMode) & { onClose: () => void }
 
-const SEVERITY_OPTIONS: { value: IssueSeverity; label: string; className: string }[] = [
-  { value: "low", label: "Niska", className: "text-gray-500" },
-  { value: "normal", label: "Normalna", className: "text-blue-600" },
-  { value: "high", label: "Wysoka", className: "text-orange-600" },
-  { value: "critical", label: "Krytyczna", className: "text-red-600" },
-]
-
 export function IssueForm(props: Props) {
+  const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const initial = props.mode === "edit" ? props.issue : null
+
   const [title, setTitle] = useState(initial?.title ?? "")
   const [description, setDescription] = useState(initial?.description ?? "")
-  const [severity, setSeverity] = useState<IssueSeverity>(initial?.severity ?? "normal")
+  const [contractor, setContractor] = useState(initial?.contractor ?? "")
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setSelectedFiles(Array.from(e.target.files ?? []))
+  }
 
   function handleSubmit() {
     setError(null)
     startTransition(async () => {
-      const result =
-        props.mode === "create"
-          ? await createIssue({
-              locationId: props.locationId,
-              title,
-              description: description || undefined,
-              severity,
-            })
-          : await updateIssue(props.issue.id, {
-              title,
-              description: description || undefined,
-              severity,
-            })
+      if (props.mode === "create") {
+        const result = await createIssue({
+          locationId: props.locationId,
+          title,
+          description: description || undefined,
+          contractor: contractor || undefined,
+        })
+        if (result.error) { setError(result.error); return }
 
-      if (result.error) {
-        setError(result.error)
+        const issueId = result.data!.id
+        for (const file of selectedFiles) {
+          const fd = new FormData()
+          fd.append("file", file)
+          fd.append("locationId", props.locationId)
+          fd.append("issueId", issueId)
+          const r = await uploadIssuePhoto(fd)
+          if (r.error) { setError(r.error); return }
+        }
       } else {
-        props.onClose()
+        const result = await updateIssue(props.issue.id, {
+          title,
+          description: description || undefined,
+          contractor: contractor || undefined,
+        })
+        if (result.error) { setError(result.error); return }
       }
+
+      router.refresh()
+      props.onClose()
     })
   }
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !isPending) props.onClose() }}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {props.mode === "create" ? "Nowa usterka" : "Edytuj usterkę"}
@@ -85,11 +83,11 @@ export function IssueForm(props: Props) {
 
         <div className="space-y-3">
           <div className="space-y-1">
-            <label className="text-sm font-medium">Tytuł</label>
+            <label className="text-sm font-medium">Krótki opis</label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Pęknięcie tynku — ściana N"
+              placeholder="np. Pęknięcie tynku — ściana N"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !isPending && title.trim()) handleSubmit()
@@ -98,32 +96,60 @@ export function IssueForm(props: Props) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">Opis</label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Opcjonalny opis usterki..."
+            <label className="text-sm font-medium">Podwykonawca</label>
+            <Input
+              value={contractor}
+              onChange={(e) => setContractor(e.target.value)}
+              placeholder="np. Firma Budowlana ABC"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">Waga</label>
-            <Select
-              value={severity}
-              onValueChange={(val) => setSeverity(val as IssueSeverity)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SEVERITY_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    <span className={opt.className}>{opt.label}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <label className="text-sm font-medium">Pełny opis</label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Szczegółowy opis usterki..."
+              rows={3}
+            />
           </div>
+
+          {props.mode === "create" && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Zdjęcia</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                capture="environment"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {selectedFiles.length > 0
+                  ? `Wybrano ${selectedFiles.length} ${selectedFiles.length === 1 ? "zdjęcie" : "zdjęć"}`
+                  : "Dodaj zdjęcia"}
+              </Button>
+              {selectedFiles.length > 0 && (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {selectedFiles.map((f, i) => (
+                    <img
+                      key={i}
+                      src={URL.createObjectURL(f)}
+                      alt={f.name}
+                      className="aspect-square w-full rounded object-cover"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {error && <p className="text-xs text-destructive">{error}</p>}
@@ -133,7 +159,11 @@ export function IssueForm(props: Props) {
             Anuluj
           </Button>
           <Button onClick={handleSubmit} disabled={isPending || !title.trim()}>
-            {isPending ? "Zapisywanie..." : "Zapisz"}
+            {isPending
+              ? props.mode === "create" && selectedFiles.length > 0
+                ? "Zapisywanie zdjęć..."
+                : "Zapisywanie..."
+              : "Zapisz"}
           </Button>
         </DialogFooter>
       </DialogContent>

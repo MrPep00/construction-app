@@ -9,7 +9,6 @@ export type Json =
   | Json[]
 
 export type IssueStatus = "open" | "in_progress" | "resolved" | "rejected"
-export type IssueSeverity = "low" | "normal" | "high" | "critical"
 export type LocationType = "branch" | "tenant_changes" | "apartment" | "room" | "folder"
 export type TaskStatus = "todo" | "doing" | "done"
 export type MovementReason = "delivery" | "consumption" | "correction"

@@ -107,6 +107,56 @@ export async function uploadFile(formData: FormData) {
   return { data }
 }
 
+export async function uploadIssuePhoto(formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: "Nie zalogowany" }
+
+  const file = formData.get("file")
+  const locationId = formData.get("locationId")
+  const issueId = formData.get("issueId")
+
+  if (!(file instanceof File)) return { error: "Brak pliku" }
+  if (typeof locationId !== "string" || !locationId) return { error: "Brak lokalizacji" }
+  if (typeof issueId !== "string" || !issueId) return { error: "Brak ID usterki" }
+
+  if (file.size > MAX_FILE_SIZE) return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
+  if (!file.type.startsWith("image/")) return { error: "Tylko zdjęcia są dozwolone" }
+
+  const uuid = randomUUID()
+  const sanitized = sanitizeFilename(file.name)
+  const storagePath = `${user.id}/${locationId}/${uuid}-${sanitized}`
+
+  const { error: uploadError } = await supabase.storage
+    .from("files")
+    .upload(storagePath, file, { contentType: file.type })
+
+  if (uploadError) return { error: uploadError.message }
+
+  const { data, error: dbError } = await supabase
+    .from("files")
+    .insert({
+      location_id: locationId,
+      issue_id: issueId,
+      name: file.name,
+      storage_path: storagePath,
+      mime_type: file.type,
+      size_bytes: file.size,
+      uploaded_by: user.id,
+    })
+    .select("id")
+    .single()
+
+  if (dbError) {
+    await supabase.storage.from("files").remove([storagePath])
+    return { error: dbError.message }
+  }
+
+  return { data }
+}
+
 export async function deleteFile(id: string) {
   const supabase = await createClient()
   const {

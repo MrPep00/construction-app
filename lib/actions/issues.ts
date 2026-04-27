@@ -3,9 +3,8 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
-import type { IssueStatus, IssueSeverity } from "@/lib/types/db"
+import type { IssueStatus } from "@/lib/types/db"
 
-const severityEnum = z.enum(["low", "normal", "high", "critical"])
 const statusEnum = z.enum(["open", "in_progress", "resolved", "rejected"])
 
 const VALID_NEXT_STATUSES: Record<IssueStatus, IssueStatus[]> = {
@@ -42,7 +41,7 @@ export async function createIssue(input: {
   locationId: string
   title: string
   description?: string
-  severity: IssueSeverity
+  contractor?: string
 }): Promise<{ data?: { id: string }; error?: string }> {
   const supabase = await createClient()
   const {
@@ -52,9 +51,9 @@ export async function createIssue(input: {
 
   const schema = z.object({
     locationId: z.string().uuid(),
-    title: z.string().min(1, "Tytuł jest wymagany").max(200, "Tytuł za długi"),
-    description: z.string().max(2000, "Opis za długi").optional(),
-    severity: severityEnum,
+    title: z.string().min(1, "Krótki opis jest wymagany").max(200, "Opis za długi"),
+    description: z.string().max(5000, "Opis za długi").optional(),
+    contractor: z.string().max(200, "Nazwa za długa").optional(),
   })
   const parsed = schema.safeParse(input)
   if (!parsed.success) {
@@ -67,8 +66,9 @@ export async function createIssue(input: {
       location_id: parsed.data.locationId,
       title: parsed.data.title,
       description: parsed.data.description ?? null,
-      severity: parsed.data.severity,
+      contractor: parsed.data.contractor ?? null,
       status: "open",
+      created_by: user.id,
     })
     .select("id")
     .single()
@@ -107,10 +107,7 @@ export async function updateIssueStatus(
 
   const { error } = await supabase
     .from("issues")
-    .update({
-      status,
-      resolved_at: status === "resolved" ? new Date().toISOString() : null,
-    })
+    .update({ status })
     .eq("id", id)
 
   if (error) return { error: error.message }
@@ -121,7 +118,7 @@ export async function updateIssueStatus(
 
 export async function updateIssue(
   id: string,
-  fields: { title?: string; description?: string; severity?: IssueSeverity }
+  fields: { title?: string; description?: string; contractor?: string }
 ): Promise<{ data?: boolean; error?: string }> {
   const supabase = await createClient()
   const {
@@ -132,9 +129,9 @@ export async function updateIssue(
   if (!z.string().uuid().safeParse(id).success) return { error: "Nieprawidłowe ID" }
 
   const schema = z.object({
-    title: z.string().min(1, "Tytuł jest wymagany").max(200).optional(),
-    description: z.string().max(2000).optional(),
-    severity: severityEnum.optional(),
+    title: z.string().min(1, "Krótki opis jest wymagany").max(200).optional(),
+    description: z.string().max(5000).optional(),
+    contractor: z.string().max(200).optional(),
   })
   const parsed = schema.safeParse(fields)
   if (!parsed.success) {

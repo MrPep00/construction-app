@@ -45,6 +45,32 @@ export default async function LocationPage({
 
   if (!location) return notFound()
 
+  const { data: issuesData } = await supabase
+    .from("issues")
+    .select("id, title, description, contractor, status, created_at")
+    .eq("location_id", locationId)
+    .order("created_at", { ascending: false })
+
+
+  const { data: filesData } = await supabase
+    .from("files")
+    .select("id, name, mime_type, size_bytes, created_at, storage_path")
+    .eq("location_id", locationId)
+    .order("created_at", { ascending: false })
+
+  let fileItems: import("@/components/upload/FileGridClient").FileItem[] = []
+  if (filesData && filesData.length > 0) {
+    const paths = filesData.map((f) => f.storage_path)
+    const { data: signedUrls } = await supabase.storage
+      .from("files")
+      .createSignedUrls(paths, 3600)
+    const urlMap = new Map<string, string>()
+    signedUrls?.forEach(({ path, signedUrl }) => {
+      if (path && signedUrl) urlMap.set(path, signedUrl)
+    })
+    fileItems = filesData.map((f) => ({ ...f, signedUrl: urlMap.get(f.storage_path) ?? null }))
+  }
+
   // Fetch direct children to render as a sublocation list
   const { data: children } = await supabase
     .from("locations")
@@ -136,7 +162,7 @@ export default async function LocationPage({
         </h2>
         <FileUploader locationId={locationId} />
         <div className="mt-6">
-          <FileGrid locationId={locationId} />
+          <FileGrid files={fileItems} />
         </div>
       </section>
 
@@ -145,7 +171,7 @@ export default async function LocationPage({
           <h2 className="text-sm font-medium text-muted-foreground">Usterki</h2>
           <NewIssueButton locationId={locationId} />
         </div>
-        <IssueList locationId={locationId} />
+        <IssueList issues={issuesData ?? []} locationId={locationId} />
       </section>
     </main>
   )
