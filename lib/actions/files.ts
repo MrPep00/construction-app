@@ -50,6 +50,75 @@ async function resolveLocationPath(
   return `/projects/${floor.project_id}/floors/${floor.level}/${locationId}`
 }
 
+export async function createUploadPath(
+  locationId: string,
+  filename: string,
+  mimeType: string,
+  sizeBytes: number,
+) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: "Nie zalogowany" }
+
+  if (sizeBytes > MAX_FILE_SIZE) {
+    return { error: `Plik "${filename}" jest za duży (max 50 MB)` }
+  }
+  if (!isAllowedFile(filename, mimeType)) {
+    return { error: `Nieobsługiwany typ pliku: ${filename}` }
+  }
+
+  const uuid = randomUUID()
+  const sanitized = sanitizeFilename(filename)
+  const storagePath = `${user.id}/${locationId}/${uuid}-${sanitized}`
+
+  const { data, error } = await supabase.storage
+    .from("files")
+    .createSignedUploadUrl(storagePath)
+
+  if (error) return { error: error.message }
+
+  return { data: { signedUrl: data.signedUrl, path: storagePath, token: data.token } }
+}
+
+export async function finalizeFileUpload(
+  locationId: string,
+  storagePath: string,
+  filename: string,
+  mimeType: string,
+  sizeBytes: number,
+) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: "Nie zalogowany" }
+
+  const { data, error: dbError } = await supabase
+    .from("files")
+    .insert({
+      location_id: locationId,
+      name: filename,
+      storage_path: storagePath,
+      mime_type: mimeType || "application/octet-stream",
+      size_bytes: sizeBytes,
+      uploaded_by: user.id,
+    })
+    .select()
+    .single()
+
+  if (dbError) {
+    await supabase.storage.from("files").remove([storagePath])
+    return { error: dbError.message }
+  }
+
+  const path = await resolveLocationPath(supabase, locationId)
+  if (path) revalidatePath(path)
+
+  return { data }
+}
+
 export async function uploadFile(formData: FormData) {
   const supabase = await createClient()
   const {
@@ -96,7 +165,6 @@ export async function uploadFile(formData: FormData) {
     .single()
 
   if (dbError) {
-    // Clean up storage orphan if DB insert fails
     await supabase.storage.from("files").remove([storagePath])
     return { error: dbError.message }
   }

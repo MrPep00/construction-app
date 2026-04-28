@@ -100,26 +100,24 @@ export default async function ProjectDashboardPage({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="flex flex-col gap-2">
         {floorList.map((floor) => (
           <Link
             key={floor.id}
             href={`/projects/${id}/floors/${floor.level}`}
             className="block"
           >
-            <Card className="h-full transition-colors hover:bg-muted/40">
-              <CardHeader>
-                <CardTitle className="text-base">{floor.label}</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <Card className="transition-colors hover:bg-muted/40">
+              <CardContent className="flex items-center justify-between py-4">
+                <span className="font-medium">{floor.label}</span>
                 <dl className="flex gap-6 text-sm">
-                  <div>
+                  <div className="text-right">
                     <dt className="text-muted-foreground">Lokalizacje</dt>
                     <dd className="font-medium">
                       {locationsByFloor[floor.id] ?? 0}
                     </dd>
                   </div>
-                  <div>
+                  <div className="text-right">
                     <dt className="text-muted-foreground">Otwarte usterki</dt>
                     <dd className="font-medium">
                       {openIssuesByFloor[floor.id] ?? 0}

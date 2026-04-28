@@ -9,10 +9,12 @@ import {
   XIcon,
   CheckIcon,
   AlertCircleIcon,
+  PlusIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { uploadFile } from "@/lib/actions/files"
+import { createUploadPath, finalizeFileUpload } from "@/lib/actions/files"
+import { createClient } from "@/lib/supabase/client"
 
 type ItemStatus = "pending" | "uploading" | "done" | "error"
 
@@ -35,6 +37,7 @@ interface Props {
 
 export function FileUploader({ locationId }: Props) {
   const router = useRouter()
+  const [open, setOpen] = useState(false)
   const [items, setItems] = useState<UploadItem[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -83,23 +86,56 @@ export function FileUploader({ locationId }: Props) {
       )
     )
 
+    const supabase = createClient()
+
     const results = await Promise.all(
       pendingItems.map(async (item) => {
-        const fd = new FormData()
-        fd.append("file", item.file)
-        fd.append("locationId", locationId)
+        const urlResult = await createUploadPath(
+          locationId,
+          item.file.name,
+          item.file.type || "application/octet-stream",
+          item.file.size,
+        )
 
-        const result = await uploadFile(fd)
+        if (urlResult.error || !urlResult.data) {
+          setItems((prev) =>
+            prev.map((i) => i.id === item.id ? { ...i, status: "error" as const } : i)
+          )
+          return { name: item.file.name, error: urlResult.error ?? "Błąd serwera" }
+        }
+
+        const { path, token } = urlResult.data
+
+        const { error: storageError } = await supabase.storage
+          .from("files")
+          .uploadToSignedUrl(path, token, item.file, {
+            contentType: item.file.type || "application/octet-stream",
+          })
+
+        if (storageError) {
+          setItems((prev) =>
+            prev.map((i) => i.id === item.id ? { ...i, status: "error" as const } : i)
+          )
+          return { name: item.file.name, error: storageError.message }
+        }
+
+        const finalResult = await finalizeFileUpload(
+          locationId,
+          path,
+          item.file.name,
+          item.file.type || "application/octet-stream",
+          item.file.size,
+        )
 
         setItems((prev) =>
           prev.map((i) =>
             i.id === item.id
-              ? { ...i, status: result.error ? ("error" as const) : ("done" as const) }
+              ? { ...i, status: finalResult.error ? ("error" as const) : ("done" as const) }
               : i
           )
         )
 
-        return { name: item.file.name, error: result.error }
+        return { name: item.file.name, error: finalResult.error }
       })
     )
 
@@ -110,11 +146,11 @@ export function FileUploader({ locationId }: Props) {
       const n = successes.length
       toast.success(`Wgrano ${n} ${pluralize(n)}`)
       router.refresh()
+      setOpen(false)
     }
 
     failures.forEach((r) => toast.error(`${r.name}: ${r.error}`))
 
-    // Revoke object URLs and reset
     items.forEach((i) => {
       if (i.previewUrl) URL.revokeObjectURL(i.previewUrl)
     })
@@ -124,10 +160,42 @@ export function FileUploader({ locationId }: Props) {
     setUploading(false)
   }
 
+  function handleClose() {
+    items.forEach((i) => { if (i.previewUrl) URL.revokeObjectURL(i.previewUrl) })
+    setItems([])
+    setOpen(false)
+  }
+
   const pendingCount = items.filter((i) => i.status === "pending").length
 
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex min-h-[44px] items-center gap-2 rounded-lg border border-dashed border-input px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        <PlusIcon className="size-4" />
+        Dodaj plik
+      </button>
+    )
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 rounded-lg border p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">Dodaj plik</span>
+        <button
+          type="button"
+          onClick={handleClose}
+          disabled={uploading}
+          className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+          aria-label="Zamknij"
+        >
+          <XIcon className="size-4" />
+        </button>
+      </div>
+
       {/* Primary action buttons */}
       <div className="flex gap-3">
         <button
@@ -158,26 +226,19 @@ export function FileUploader({ locationId }: Props) {
         capture="environment"
         multiple
         className="hidden"
-        onChange={(e) => {
-          if (e.target.files) addFiles(e.target.files)
-        }}
+        onChange={(e) => { if (e.target.files) addFiles(e.target.files) }}
       />
       <input
         ref={fileRef}
         type="file"
         multiple
         className="hidden"
-        onChange={(e) => {
-          if (e.target.files) addFiles(e.target.files)
-        }}
+        onChange={(e) => { if (e.target.files) addFiles(e.target.files) }}
       />
 
       {/* Drag-and-drop zone — desktop only */}
       <div
-        onDragOver={(e) => {
-          e.preventDefault()
-          setDragging(true)
-        }}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragEnter={() => setDragging(true)}
         onDragLeave={(e) => {
           if (!e.relatedTarget || !e.currentTarget.contains(e.relatedTarget as Node)) {
@@ -224,7 +285,6 @@ export function FileUploader({ locationId }: Props) {
                     </div>
                   )}
 
-                  {/* Status overlays */}
                   {item.status === "uploading" && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                       <div className="size-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -241,7 +301,6 @@ export function FileUploader({ locationId }: Props) {
                     </div>
                   )}
 
-                  {/* Remove button — only before upload starts */}
                   {item.status === "pending" && (
                     <button
                       type="button"
@@ -253,11 +312,7 @@ export function FileUploader({ locationId }: Props) {
                     </button>
                   )}
                 </div>
-
-                <p
-                  className="mt-1 truncate text-xs text-muted-foreground"
-                  title={item.file.name}
-                >
+                <p className="mt-1 truncate text-xs text-muted-foreground" title={item.file.name}>
                   {item.file.name}
                 </p>
               </div>
@@ -271,9 +326,7 @@ export function FileUploader({ locationId }: Props) {
             className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <UploadIcon className="size-4" />
-            {uploading
-              ? "Wgrywanie..."
-              : `Wgraj ${pendingCount} ${pluralize(pendingCount)}`}
+            {uploading ? "Wgrywanie..." : `Wgraj ${pendingCount} ${pluralize(pendingCount)}`}
           </button>
         </div>
       )}
