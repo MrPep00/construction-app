@@ -5,6 +5,9 @@ import { LocationTree } from "@/components/tree/LocationTree"
 import { TaskList } from "@/components/tasks/TaskList"
 import { NotesPanel } from "@/components/notes/NotesPanel"
 import { FloorTabs } from "@/components/FloorTabs"
+import { FileUploader } from "@/components/upload/FileUploader"
+import { FileGrid } from "@/components/upload/FileGrid"
+import type { FileItem } from "@/components/upload/FileGridClient"
 
 export default async function FloorPage({
   params,
@@ -57,6 +60,29 @@ export default async function FloorPage({
     })
   }
 
+  // Floor-level files (drawings)
+  const { data: filesData } = await supabase
+    .from("files")
+    .select("id, name, mime_type, size_bytes, created_at, storage_path")
+    .eq("floor_id", floor.id)
+    .order("created_at", { ascending: false })
+
+  let floorFileItems: FileItem[] = []
+  if (filesData && filesData.length > 0) {
+    const paths = filesData.map((f) => f.storage_path)
+    const { data: signedUrls } = await supabase.storage
+      .from("files")
+      .createSignedUrls(paths, 3600)
+    const urlMap = new Map<string, string>()
+    signedUrls?.forEach(({ path, signedUrl }) => {
+      if (path && signedUrl) urlMap.set(path, signedUrl)
+    })
+    floorFileItems = filesData.map((f) => ({
+      ...f,
+      signedUrl: urlMap.get(f.storage_path) ?? null,
+    }))
+  }
+
   return (
     <main className="container mx-auto max-w-3xl px-4 py-6">
       <nav className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -73,15 +99,31 @@ export default async function FloorPage({
 
       <h1 className="mb-6 text-2xl font-bold">{floor.label}</h1>
 
+      {/* Floor-level files — always visible */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Pliki piętra</h2>
+        <FileUploader floorId={floor.id} />
+        {floorFileItems.length > 0 && (
+          <div className="mt-4">
+            <FileGrid files={floorFileItems} />
+          </div>
+        )}
+      </section>
+
+      {/* Subfolders (Zmiany lokatorskie + custom) — always visible */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Foldery</h2>
+        <LocationTree
+          locations={locations ?? []}
+          projectId={id}
+          floorLevel={level}
+          floorId={floor.id}
+          openIssueCounts={openIssueCounts}
+        />
+      </section>
+
+      {/* Tasks & Notes as tabs */}
       <FloorTabs
-        tree={
-          <LocationTree
-            locations={locations ?? []}
-            projectId={id}
-            floorLevel={level}
-            openIssueCounts={openIssueCounts}
-          />
-        }
         tasks={<TaskList projectId={id} floorId={floor.id} />}
         notes={<NotesPanel projectId={id} floorId={floor.id} />}
       />

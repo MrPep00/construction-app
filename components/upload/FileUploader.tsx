@@ -13,7 +13,12 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { createUploadPath, finalizeFileUpload } from "@/lib/actions/files"
+import {
+  createUploadPath,
+  finalizeFileUpload,
+  createUploadPathForFloor,
+  finalizeFileUploadForFloor,
+} from "@/lib/actions/files"
 import { createClient } from "@/lib/supabase/client"
 
 type ItemStatus = "pending" | "uploading" | "done" | "error"
@@ -31,13 +36,14 @@ function pluralize(n: number): string {
   return "plików"
 }
 
-interface Props {
-  locationId: string
-}
+type BaseProps = { defaultOpen?: boolean; onDone?: () => void }
+type Props =
+  | (BaseProps & { locationId: string; floorId?: never })
+  | (BaseProps & { floorId: string; locationId?: never })
 
-export function FileUploader({ locationId }: Props) {
+export function FileUploader({ locationId, floorId, defaultOpen = false, onDone }: Props) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
   const [items, setItems] = useState<UploadItem[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -90,12 +96,11 @@ export function FileUploader({ locationId }: Props) {
 
     const results = await Promise.all(
       pendingItems.map(async (item) => {
-        const urlResult = await createUploadPath(
-          locationId,
-          item.file.name,
-          item.file.type || "application/octet-stream",
-          item.file.size,
-        )
+        const mimeType = item.file.type || "application/octet-stream"
+
+        const urlResult = floorId
+          ? await createUploadPathForFloor(floorId, item.file.name, mimeType, item.file.size)
+          : await createUploadPath(locationId!, item.file.name, mimeType, item.file.size)
 
         if (urlResult.error || !urlResult.data) {
           setItems((prev) =>
@@ -108,9 +113,7 @@ export function FileUploader({ locationId }: Props) {
 
         const { error: storageError } = await supabase.storage
           .from("files")
-          .uploadToSignedUrl(path, token, item.file, {
-            contentType: item.file.type || "application/octet-stream",
-          })
+          .uploadToSignedUrl(path, token, item.file, { contentType: mimeType })
 
         if (storageError) {
           setItems((prev) =>
@@ -119,13 +122,9 @@ export function FileUploader({ locationId }: Props) {
           return { name: item.file.name, error: storageError.message }
         }
 
-        const finalResult = await finalizeFileUpload(
-          locationId,
-          path,
-          item.file.name,
-          item.file.type || "application/octet-stream",
-          item.file.size,
-        )
+        const finalResult = floorId
+          ? await finalizeFileUploadForFloor(floorId, path, item.file.name, mimeType, item.file.size)
+          : await finalizeFileUpload(locationId!, path, item.file.name, mimeType, item.file.size)
 
         setItems((prev) =>
           prev.map((i) =>
@@ -147,6 +146,7 @@ export function FileUploader({ locationId }: Props) {
       toast.success(`Wgrano ${n} ${pluralize(n)}`)
       router.refresh()
       setOpen(false)
+      onDone?.()
     }
 
     failures.forEach((r) => toast.error(`${r.name}: ${r.error}`))
@@ -164,6 +164,7 @@ export function FileUploader({ locationId }: Props) {
     items.forEach((i) => { if (i.previewUrl) URL.revokeObjectURL(i.previewUrl) })
     setItems([])
     setOpen(false)
+    onDone?.()
   }
 
   const pendingCount = items.filter((i) => i.status === "pending").length

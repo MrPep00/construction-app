@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ChevronRightIcon, MoreHorizontalIcon } from "lucide-react"
+import { ChevronRightIcon, MoreHorizontalIcon, UploadIcon } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -15,15 +15,14 @@ import type { LocationTreeNode } from "./LocationTree"
 import type { DialogMode } from "./LocationDialog"
 
 export const TYPE_ICONS: Record<string, string> = {
-  branch: "📐",
   tenant_changes: "🏠",
   apartment: "🚪",
   room: "🛋️",
   folder: "📁",
 }
 
-const CAN_ADD_SUBFOLDER = new Set(["branch", "tenant_changes", "folder", "apartment", "room"])
-const CAN_ADD_APARTMENT = new Set(["branch", "tenant_changes"])
+const CAN_ADD_SUBFOLDER = new Set(["tenant_changes", "folder", "apartment", "room"])
+const CAN_ADD_APARTMENT = new Set(["tenant_changes"])
 
 interface Props {
   node: LocationTreeNode
@@ -31,6 +30,7 @@ interface Props {
   expanded: boolean
   onToggle: () => void
   onDialog: (mode: DialogMode) => void
+  onOpenUploader: (id: string, name: string) => void
   projectId: string
   floorLevel: number
   openIssueCount?: number
@@ -43,14 +43,13 @@ export function LocationNode({
   expanded,
   onToggle,
   onDialog,
+  onOpenUploader,
   projectId,
   floorLevel,
   openIssueCount = 0,
   children,
 }: Props) {
-  const isLocked =
-    node.parent_id === null &&
-    (node.type === "branch" || node.type === "tenant_changes")
+  const isLocked = node.parent_id === null && node.type === "tenant_changes"
 
   const hasChildren = node.children.length > 0
   // md:24px, default 16px per depth level
@@ -115,6 +114,11 @@ export function LocationNode({
             <MoreHorizontalIcon className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end">
+            <DropdownMenuItem onClick={() => onOpenUploader(node.id, node.name)}>
+              <UploadIcon className="mr-2 size-4" />
+              Dodaj plik
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             {CAN_ADD_SUBFOLDER.has(node.type) && (
               <DropdownMenuItem
                 onClick={() =>

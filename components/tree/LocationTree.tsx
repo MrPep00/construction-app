@@ -1,15 +1,23 @@
 "use client"
 
 import { useState } from "react"
+import { PlusIcon } from "lucide-react"
 import { LocationNode } from "./LocationNode"
 import { LocationDialog, type DialogMode } from "./LocationDialog"
+import { FileUploader } from "@/components/upload/FileUploader"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export type LocationRow = {
   id: string
   parent_id: string | null
   floor_id: string
   name: string
-  type: "branch" | "tenant_changes" | "apartment" | "room" | "folder"
+  type: "tenant_changes" | "apartment" | "room" | "folder"
   sort_order: number
 }
 
@@ -31,11 +39,11 @@ interface Props {
   locations: LocationRow[]
   projectId: string
   floorLevel: number
+  floorId: string
   openIssueCounts?: Record<string, number>
 }
 
-export function LocationTree({ locations, projectId, floorLevel, openIssueCounts }: Props) {
-  // Default: tenant_changes expanded, branches collapsed
+export function LocationTree({ locations, projectId, floorLevel, floorId, openIssueCounts }: Props) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     const initial = new Set<string>()
     for (const loc of locations) {
@@ -45,6 +53,7 @@ export function LocationTree({ locations, projectId, floorLevel, openIssueCounts
   })
 
   const [activeDialog, setActiveDialog] = useState<DialogMode | null>(null)
+  const [uploaderNode, setUploaderNode] = useState<{ id: string; name: string } | null>(null)
 
   function toggleExpanded(id: string) {
     setExpandedIds((prev) => {
@@ -70,6 +79,7 @@ export function LocationTree({ locations, projectId, floorLevel, openIssueCounts
         expanded={expanded}
         onToggle={() => toggleExpanded(node.id)}
         onDialog={setActiveDialog}
+        onOpenUploader={(id, name) => setUploaderNode({ id, name })}
         projectId={projectId}
         floorLevel={floorLevel}
         openIssueCount={openIssueCounts?.[node.id] ?? 0}
@@ -81,13 +91,22 @@ export function LocationTree({ locations, projectId, floorLevel, openIssueCounts
 
   return (
     <>
-      {roots.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Brak lokalizacji.</p>
-      ) : (
+      {roots.length > 0 && (
         <ul className="space-y-0.5">
           {roots.map((root) => renderNode(root, 0))}
         </ul>
       )}
+
+      <button
+        type="button"
+        onClick={() =>
+          setActiveDialog({ type: "create-subfolder", parentId: null, floorId })
+        }
+        className="mt-2 flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-dashed border-input px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground md:min-h-0 md:py-2"
+      >
+        <PlusIcon className="size-4 shrink-0" />
+        Dodaj folder
+      </button>
 
       {activeDialog && (
         <LocationDialog
@@ -95,6 +114,21 @@ export function LocationTree({ locations, projectId, floorLevel, openIssueCounts
           mode={activeDialog}
           onClose={() => setActiveDialog(null)}
         />
+      )}
+
+      {uploaderNode && (
+        <Dialog open onOpenChange={(o) => { if (!o) setUploaderNode(null) }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Wgraj plik — {uploaderNode.name}</DialogTitle>
+            </DialogHeader>
+            <FileUploader
+              locationId={uploaderNode.id}
+              defaultOpen
+              onDone={() => setUploaderNode(null)}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </>
   )

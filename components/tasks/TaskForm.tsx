@@ -114,7 +114,7 @@ export function TaskForm(props: Props) {
 
           <div className="space-y-1">
             <label className="text-sm font-medium">Priorytet</label>
-            <Select value={priority} onValueChange={setPriority}>
+            <Select value={priority} onValueChange={(v) => v && setPriority(v)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>

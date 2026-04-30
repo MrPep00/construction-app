@@ -17,8 +17,8 @@ import {
 } from "@/lib/actions/locations"
 
 export type DialogMode =
-  | { type: "create-subfolder"; parentId: string; floorId: string }
-  | { type: "create-apartment"; parentId: string; floorId: string }
+  | { type: "create-subfolder"; parentId: string | null; floorId: string }
+  | { type: "create-apartment"; parentId: string | null; floorId: string }
   | { type: "rename"; locationId: string; currentName: string }
   | { type: "delete"; locationId: string; name: string }
 
