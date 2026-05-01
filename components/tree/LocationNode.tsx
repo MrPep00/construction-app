@@ -1,7 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { ChevronRightIcon, MoreHorizontalIcon, UploadIcon } from "lucide-react"
+import {
+  ChevronRightIcon,
+  FolderPlusIcon,
+  MoreHorizontalIcon,
+  UploadIcon,
+} from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -50,12 +55,8 @@ export function LocationNode({
   children,
 }: Props) {
   const isLocked = node.parent_id === null && node.type === "tenant_changes"
-
   const hasChildren = node.children.length > 0
-  // md:24px, default 16px per depth level
-  const indentStyle = {
-    paddingLeft: `${depth * 16 + 4}px`,
-  }
+  const indentStyle = { paddingLeft: `${depth * 16 + 4}px` }
 
   return (
     <li>
@@ -63,7 +64,7 @@ export function LocationNode({
         className="group flex min-h-[44px] items-center gap-1 rounded-lg pr-1 hover:bg-muted/50 md:min-h-0 md:py-1"
         style={indentStyle}
       >
-        {/* Expand/collapse chevron — always takes up space for alignment */}
+        {/* Expand/collapse chevron */}
         <button
           type="button"
           onClick={hasChildren ? onToggle : undefined}
@@ -102,36 +103,54 @@ export function LocationNode({
           )}
         </Link>
 
-        {/* Actions */}
+        {/* Upload button — always visible */}
+        <button
+          type="button"
+          onClick={() => onOpenUploader(node.id, node.name)}
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "icon-sm" }),
+            "shrink-0"
+          )}
+          aria-label={`Dodaj plik do ${node.name}`}
+          title="Dodaj plik"
+        >
+          <UploadIcon className="size-4" />
+        </button>
+
+        {/* Add subfolder button — always visible */}
+        {CAN_ADD_SUBFOLDER.has(node.type) && (
+          <button
+            type="button"
+            onClick={() =>
+              onDialog({
+                type: "create-subfolder",
+                parentId: node.id,
+                floorId: node.floor_id,
+              })
+            }
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon-sm" }),
+              "shrink-0"
+            )}
+            aria-label={`Dodaj podfolder do ${node.name}`}
+            title="Dodaj podfolder"
+          >
+            <FolderPlusIcon className="size-4" />
+          </button>
+        )}
+
+        {/* Dropdown for secondary actions (rename, delete, add apartment) */}
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
               buttonVariants({ variant: "ghost", size: "icon-sm" }),
               "shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
             )}
-            aria-label="Opcje"
+            aria-label="Więcej opcji"
           >
             <MoreHorizontalIcon className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end">
-            <DropdownMenuItem onClick={() => onOpenUploader(node.id, node.name)}>
-              <UploadIcon className="mr-2 size-4" />
-              Dodaj plik
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {CAN_ADD_SUBFOLDER.has(node.type) && (
-              <DropdownMenuItem
-                onClick={() =>
-                  onDialog({
-                    type: "create-subfolder",
-                    parentId: node.id,
-                    floorId: node.floor_id,
-                  })
-                }
-              >
-                Dodaj podfolder
-              </DropdownMenuItem>
-            )}
             {CAN_ADD_APARTMENT.has(node.type) && (
               <DropdownMenuItem
                 onClick={() =>
@@ -145,13 +164,9 @@ export function LocationNode({
                 Dodaj mieszkanie
               </DropdownMenuItem>
             )}
-
-            {!isLocked &&
-              (CAN_ADD_SUBFOLDER.has(node.type) ||
-                CAN_ADD_APARTMENT.has(node.type)) && (
-                <DropdownMenuSeparator />
-              )}
-
+            {CAN_ADD_APARTMENT.has(node.type) && !isLocked && (
+              <DropdownMenuSeparator />
+            )}
             {!isLocked && (
               <DropdownMenuItem
                 onClick={() =>
@@ -188,7 +203,6 @@ export function LocationNode({
         </DropdownMenu>
       </div>
 
-      {/* Rendered children injected by LocationTree */}
       {hasChildren && expanded && children && (
         <ul>{children}</ul>
       )}

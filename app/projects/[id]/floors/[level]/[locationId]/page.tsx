@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { TYPE_ICONS } from "@/components/tree/LocationNode"
+import { AddChildButton } from "@/components/tree/AddChildButton"
 import { FileUploader } from "@/components/upload/FileUploader"
 import { FileGrid } from "@/components/upload/FileGrid"
 import { IssueList } from "@/components/issues/IssueList"
@@ -45,18 +46,24 @@ export default async function LocationPage({
 
   if (!location) return notFound()
 
-  const { data: issuesData } = await supabase
-    .from("issues")
-    .select("id, title, description, contractor, status, created_at")
-    .eq("location_id", locationId)
-    .order("created_at", { ascending: false })
-
-
-  const { data: filesData } = await supabase
-    .from("files")
-    .select("id, name, mime_type, size_bytes, created_at, storage_path")
-    .eq("location_id", locationId)
-    .order("created_at", { ascending: false })
+  const [{ data: issuesData }, { data: filesData }, { data: children }] =
+    await Promise.all([
+      supabase
+        .from("issues")
+        .select("id, title, description, contractor, status, created_at")
+        .eq("location_id", locationId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("files")
+        .select("id, name, mime_type, size_bytes, created_at, storage_path")
+        .eq("location_id", locationId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("locations")
+        .select("id, name, type, sort_order")
+        .eq("parent_id", locationId)
+        .order("sort_order"),
+    ])
 
   let fileItems: import("@/components/upload/FileGridClient").FileItem[] = []
   if (filesData && filesData.length > 0) {
@@ -68,17 +75,13 @@ export default async function LocationPage({
     signedUrls?.forEach(({ path, signedUrl }) => {
       if (path && signedUrl) urlMap.set(path, signedUrl)
     })
-    fileItems = filesData.map((f) => ({ ...f, signedUrl: urlMap.get(f.storage_path) ?? null }))
+    fileItems = filesData.map((f) => ({
+      ...f,
+      signedUrl: urlMap.get(f.storage_path) ?? null,
+    }))
   }
 
-  // Fetch direct children to render as a sublocation list
-  const { data: children } = await supabase
-    .from("locations")
-    .select("id, name, type, sort_order")
-    .eq("parent_id", locationId)
-    .order("sort_order")
-
-  // Build breadcrumb path by walking up parent chain
+  // Build breadcrumb by walking up parent chain
   const breadcrumbParts: { id: string; name: string }[] = []
   let current: { parent_id: string | null; name: string; id: string } = location
 
@@ -95,6 +98,10 @@ export default async function LocationPage({
   }
 
   const icon = TYPE_ICONS[location.type] ?? "📁"
+  const canAddSubfolder = ["tenant_changes", "folder", "apartment", "room"].includes(
+    location.type
+  )
+  const canAddApartment = location.type === "tenant_changes"
 
   return (
     <main className="container mx-auto max-w-3xl px-4 py-6">
@@ -133,12 +140,14 @@ export default async function LocationPage({
         <span>{location.name}</span>
       </h1>
 
-      {children && children.length > 0 && (
-        <section className="mb-6">
-          <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-            Podfoldery i lokalizacje
-          </h2>
-          <ul className="space-y-1">
+      {/* Subfolders */}
+      <section className="mb-6">
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+          Podfoldery
+        </h2>
+
+        {children && children.length > 0 && (
+          <ul className="mb-2 space-y-1">
             {children.map((child) => (
               <li key={child.id}>
                 <Link
@@ -153,20 +162,45 @@ export default async function LocationPage({
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        )}
 
-      <section>
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-          Pliki
-        </h2>
-        <FileUploader locationId={locationId} />
-        <div className="mt-6">
-          <FileGrid files={fileItems} />
+        <div className="flex flex-wrap gap-2">
+          {canAddSubfolder && (
+            <AddChildButton
+              mode={{
+                type: "create-subfolder",
+                parentId: locationId,
+                floorId: floor.id,
+              }}
+              label="Dodaj podfolder"
+            />
+          )}
+          {canAddApartment && (
+            <AddChildButton
+              mode={{
+                type: "create-apartment",
+                parentId: locationId,
+                floorId: floor.id,
+              }}
+              label="Dodaj mieszkanie"
+            />
+          )}
         </div>
       </section>
 
-      <section className="mt-8">
+      {/* Files */}
+      <section className="mb-6">
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Pliki</h2>
+        <FileUploader locationId={locationId} />
+        {fileItems.length > 0 && (
+          <div className="mt-4">
+            <FileGrid files={fileItems} />
+          </div>
+        )}
+      </section>
+
+      {/* Issues */}
+      <section>
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium text-muted-foreground">Usterki</h2>
           <NewIssueButton locationId={locationId} />
