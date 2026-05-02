@@ -296,6 +296,59 @@ export async function uploadIssuePhoto(formData: FormData) {
   return { data }
 }
 
+export async function uploadFileForTask(formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: "Nie zalogowany" }
+
+  const file = formData.get("file")
+  const taskId = formData.get("taskId")
+
+  if (!(file instanceof File)) return { error: "Brak pliku" }
+  if (typeof taskId !== "string" || !taskId) return { error: "Brak ID zadania" }
+
+  if (file.size > MAX_FILE_SIZE) {
+    return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
+  }
+  if (!isAllowedFile(file.name, file.type)) {
+    return { error: `Nieobsługiwany typ pliku: ${file.name}` }
+  }
+
+  const uuid = randomUUID()
+  const sanitized = sanitizeFilename(file.name)
+  const storagePath = `${user.id}/tasks/${taskId}/${uuid}-${sanitized}`
+
+  const { error: uploadError } = await supabase.storage
+    .from("files")
+    .upload(storagePath, file, {
+      contentType: file.type || "application/octet-stream",
+    })
+
+  if (uploadError) return { error: uploadError.message }
+
+  const { data, error: dbError } = await supabase
+    .from("files")
+    .insert({
+      task_id: taskId,
+      name: file.name,
+      storage_path: storagePath,
+      mime_type: file.type || "application/octet-stream",
+      size_bytes: file.size,
+      uploaded_by: user.id,
+    })
+    .select("id")
+    .single()
+
+  if (dbError) {
+    await supabase.storage.from("files").remove([storagePath])
+    return { error: dbError.message }
+  }
+
+  return { data }
+}
+
 export async function deleteFile(id: string) {
   const supabase = await createClient()
   const {
@@ -305,7 +358,7 @@ export async function deleteFile(id: string) {
 
   const { data: file } = await supabase
     .from("files")
-    .select("id, storage_path, location_id, floor_id")
+    .select("id, storage_path, location_id, floor_id, task_id")
     .eq("id", id)
     .single()
 

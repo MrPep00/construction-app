@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import {
   Dialog,
   DialogContent,
@@ -11,14 +11,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { PaperclipIcon, XIcon } from "lucide-react"
 import { createTask, updateTask } from "@/lib/actions/tasks"
+import { uploadFileForTask } from "@/lib/actions/files"
 
 type CreateMode = { mode: "create"; projectId: string; floorId?: string | null }
 type EditMode = {
@@ -27,55 +22,72 @@ type EditMode = {
     id: string
     title: string
     description: string | null
-    priority: number
-    due_date: string | null
   }
 }
 
 type Props = (CreateMode | EditMode) & { onClose: () => void }
 
-const PRIORITY_OPTIONS = [
-  { value: "1", label: "1 — Wysoki" },
-  { value: "2", label: "2 — Podwyższony" },
-  { value: "3", label: "3 — Normalny" },
-  { value: "4", label: "4 — Niski" },
-  { value: "5", label: "5 — Bardzo niski" },
-]
-
 export function TaskForm(props: Props) {
   const initial = props.mode === "edit" ? props.task : null
   const [title, setTitle] = useState(initial?.title ?? "")
   const [description, setDescription] = useState(initial?.description ?? "")
-  const [priority, setPriority] = useState(String(initial?.priority ?? "3"))
-  const [dueDate, setDueDate] = useState(initial?.due_date ?? "")
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? [])
+    setPendingFiles((prev) => {
+      const existing = new Set(prev.map((f) => f.name + f.size))
+      return [...prev, ...selected.filter((f) => !existing.has(f.name + f.size))]
+    })
+    e.target.value = ""
+  }
+
+  function removeFile(index: number) {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index))
+  }
 
   function handleSubmit() {
     setError(null)
     startTransition(async () => {
-      const result =
-        props.mode === "create"
-          ? await createTask({
-              projectId: props.projectId,
-              floorId: props.floorId,
-              title,
-              description: description || undefined,
-              priority: Number(priority),
-              dueDate: dueDate || null,
-            })
-          : await updateTask(props.task.id, {
-              title,
-              description: description || null,
-              priority: Number(priority),
-              dueDate: dueDate || null,
-            })
+      let taskId: string | undefined
 
-      if (result.error) {
-        setError(result.error)
+      if (props.mode === "create") {
+        const result = await createTask({
+          projectId: props.projectId,
+          floorId: props.floorId,
+          title,
+          description: description || undefined,
+          priority: 3,
+          dueDate: null,
+        })
+        if (result.error) { setError(result.error); return }
+        taskId = result.data?.id
       } else {
-        props.onClose()
+        const result = await updateTask(props.task.id, {
+          title,
+          description: description || null,
+        })
+        if (result.error) { setError(result.error); return }
+        taskId = props.task.id
       }
+
+      if (taskId && pendingFiles.length > 0) {
+        for (const file of pendingFiles) {
+          const fd = new FormData()
+          fd.append("file", file)
+          fd.append("taskId", taskId)
+          const result = await uploadFileForTask(fd)
+          if (result.error) {
+            setError(`Błąd uploadu "${file.name}": ${result.error}`)
+            return
+          }
+        }
+      }
+
+      props.onClose()
     })
   }
 
@@ -103,7 +115,7 @@ export function TaskForm(props: Props) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">Opis (opcjonalny)</label>
+            <label className="text-sm font-medium">Opis <span className="text-muted-foreground font-normal">(opcjonalny)</span></label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -112,29 +124,42 @@ export function TaskForm(props: Props) {
             />
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Priorytet</label>
-            <Select value={priority} onValueChange={(v) => v && setPriority(v)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PRIORITY_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Termin (opcjonalny)</label>
-            <Input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+          <div className="space-y-1.5">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleFilesChange}
             />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isPending}
+            >
+              <PaperclipIcon className="size-4" />
+              Dodaj pliki
+            </Button>
+
+            {pendingFiles.length > 0 && (
+              <ul className="space-y-1">
+                {pendingFiles.map((file, i) => (
+                  <li key={i} className="flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1 text-xs">
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{file.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(i)}
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                      aria-label={`Usuń ${file.name}`}
+                    >
+                      <XIcon className="size-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 

@@ -2,7 +2,6 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { buttonVariants } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 
 export default async function ProjectDashboardPage({
   params,
@@ -29,29 +28,31 @@ export default async function ProjectDashboardPage({
   const floorList = floors ?? []
   const floorIds = floorList.map((f) => f.id)
 
-  // Fetch all location ids + floor_id for this project in one query
+  // Fetch locations with type and parent_id for apartment counting
   const { data: allLocations } = await supabase
     .from("locations")
-    .select("id, floor_id")
+    .select("id, floor_id, type, parent_id")
     .in("floor_id", floorIds)
 
-  const locationsByFloor: Record<string, number> = Object.fromEntries(
-    floorIds.map((fid) => [
-      fid,
-      allLocations?.filter((l) => l.floor_id === fid).length ?? 0,
-    ])
-  )
-
-  // Map location id → floor id to count open issues per floor
   const locationIdToFloorId: Record<string, string> = {}
   allLocations?.forEach((l) => {
     locationIdToFloorId[l.id] = l.floor_id
   })
 
+  // Count apartments (type='apartment') per floor
+  const tenantChangesByFloor: Record<string, number> = Object.fromEntries(
+    floorIds.map((fid) => [fid, 0])
+  )
+  allLocations?.forEach((l) => {
+    if (l.type === "apartment") {
+      tenantChangesByFloor[l.floor_id] = (tenantChangesByFloor[l.floor_id] ?? 0) + 1
+    }
+  })
+
+  // Count open issues per floor
   const openIssuesByFloor: Record<string, number> = Object.fromEntries(
     floorIds.map((fid) => [fid, 0])
   )
-
   const locationIds = Object.keys(locationIdToFloorId)
   if (locationIds.length > 0) {
     const { data: openIssues } = await supabase
@@ -63,6 +64,24 @@ export default async function ProjectDashboardPage({
     openIssues?.forEach((issue) => {
       const fid = locationIdToFloorId[issue.location_id]
       if (fid) openIssuesByFloor[fid] = (openIssuesByFloor[fid] ?? 0) + 1
+    })
+  }
+
+  // Count active tasks (todo + doing) per floor
+  const activeTasksByFloor: Record<string, number> = Object.fromEntries(
+    floorIds.map((fid) => [fid, 0])
+  )
+  if (floorIds.length > 0) {
+    const { data: activeTasks } = await supabase
+      .from("tasks")
+      .select("floor_id")
+      .in("floor_id", floorIds)
+      .in("status", ["todo", "doing"])
+
+    activeTasks?.forEach((task) => {
+      if (task.floor_id) {
+        activeTasksByFloor[task.floor_id] = (activeTasksByFloor[task.floor_id] ?? 0) + 1
+      }
     })
   }
 
@@ -100,34 +119,39 @@ export default async function ProjectDashboardPage({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        {floorList.map((floor) => (
-          <Link
-            key={floor.id}
-            href={`/projects/${id}/floors/${floor.level}`}
-            className="block"
-          >
-            <Card className="transition-colors hover:bg-muted/40">
-              <CardContent className="flex items-center justify-between py-4">
-                <span className="font-medium">{floor.label}</span>
-                <dl className="flex gap-6 text-sm">
-                  <div className="text-right">
-                    <dt className="text-muted-foreground">Lokalizacje</dt>
-                    <dd className="font-medium">
-                      {locationsByFloor[floor.id] ?? 0}
-                    </dd>
-                  </div>
-                  <div className="text-right">
-                    <dt className="text-muted-foreground">Otwarte usterki</dt>
-                    <dd className="font-medium">
-                      {openIssuesByFloor[floor.id] ?? 0}
-                    </dd>
-                  </div>
-                </dl>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+      <div className="flex flex-col gap-0.5">
+        {floorList.map((floor) => {
+          const issues = openIssuesByFloor[floor.id] ?? 0
+          const tasks = activeTasksByFloor[floor.id] ?? 0
+          const apartments = tenantChangesByFloor[floor.id] ?? 0
+
+          return (
+            <Link
+              key={floor.id}
+              href={`/projects/${id}/floors/${floor.level}`}
+              className="flex min-h-[44px] items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/50 md:min-h-0 md:py-1.5"
+            >
+              <span>{floor.label}</span>
+              <div className="flex items-center gap-2 text-xs">
+                {issues > 0 && (
+                  <span className="rounded-full bg-red-100 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                    {issues} usterek
+                  </span>
+                )}
+                {tasks > 0 && (
+                  <span className="rounded-full bg-blue-100 px-1.5 py-0.5 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                    {tasks} zadań
+                  </span>
+                )}
+                {apartments > 0 && (
+                  <span className="text-muted-foreground">
+                    🏠 {apartments}
+                  </span>
+                )}
+              </div>
+            </Link>
+          )
+        })}
       </div>
     </main>
   )
