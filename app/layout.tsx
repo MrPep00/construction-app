@@ -1,8 +1,10 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/ui/sonner"
 import { Header } from "@/components/header"
+import { OfflineBanner } from "@/components/offline-banner"
+import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,7 +18,25 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Inspekcja Budowy",
-  description: "Aplikacja do inspekcji budów",
+  description: "Aplikacja do zarządzania inspekcjami budów, usterkami i inwentaryzacją materiałów",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Inspekcja",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: "#1e3a8a",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 }
 
 export default function RootLayout({
@@ -29,7 +49,9 @@ export default function RootLayout({
       lang="pl"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="flex min-h-full flex-col">
+        <ServiceWorkerRegistrar />
+        <OfflineBanner />
         <Header />
         {children}
         <Toaster />

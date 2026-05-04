@@ -1,12 +1,13 @@
 {
-  "name": "Construction Inspection App",
-  "short_name": "InspectionApp",
-  "description": "Civil engineering site inspection management",
+  "name": "Aplikacja Inspekcji Budowy",
+  "short_name": "Inspekcja",
+  "description": "Zarządzanie inspekcjami budów, usterkami i inwentaryzacją materiałów",
   "start_url": "/projects",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#1e3a5f",
+  "theme_color": "#1e3a8a",
   "icons": [
     {
       "src": "/icons/icon-192.png",

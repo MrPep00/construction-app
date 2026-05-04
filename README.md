@@ -1,87 +1,161 @@
-# Construction Inspection App
+# Aplikacja Inspekcji Budowy
 
-Web app for civil engineering site inspections. Manages project hierarchy (floors → branches → apartments), file uploads (photos, drawings), defect tracking, material inventory, and tasks/notes.
+Aplikacja PWA do zarządzania inspekcjami budów — usterki, zdjęcia, zadania, notatki i inwentaryzacja materiałów.
 
-Built with Next.js 15 (App Router), Supabase, Tailwind CSS, and shadcn/ui.
+**Produkcyjny URL:** _(po deploy na Vercel — uzupełnij tutaj)_
 
 ---
 
-## Setup
+## Funkcjonalności
 
-### 1. Create a Supabase project
+- Hierarchia lokalizacji: piętra → Zmiany lokatorskie → mieszkania → pokoje
+- Upload zdjęć z kamery telefonu i drag&drop plików
+- Lista usterek (defect tracking) z wykonawcami i statusami
+- Zadania globalne i per-piętro z optymistycznym przełączaniem
+- Notatki globalne i per-piętro
+- Inwentaryzacja materiałów (stan magazynowy per piętro, historia ruchów)
+- PWA — instalowalna na telefon, odczyt offline
 
-1. Go to [supabase.com](https://supabase.com) and create a new project.
-2. Wait for provisioning (~1 min).
+---
 
-### 2. Run the database migration
+## Stack technologiczny
 
-1. Open your project in the Supabase Dashboard.
-2. Navigate to **SQL Editor** → **New query**.
-3. Paste the entire contents of `supabase/migrations/001_initial.sql`.
-4. Click **Run**.
+| Warstwa | Technologia |
+|---|---|
+| Frontend | Next.js 16 (App Router) + TypeScript |
+| Styling | Tailwind CSS + shadcn/ui |
+| Backend | Next.js Server Actions |
+| Baza danych | Supabase Postgres + RLS |
+| Storage | Supabase Storage |
+| Auth | Supabase Auth (magic link) |
+| PWA | Service Worker (static, NetworkFirst/CacheFirst) |
+| Walidacja | Zod |
+| Hosting | Vercel |
+| Monitoring | Sentry (opcjonalne) |
 
-### 3. Create the storage bucket
+---
 
-1. In the Supabase Dashboard, go to **Storage** → **New bucket**.
-2. Name it `files`.
-3. Set it to **Private** (not public).
-4. The storage RLS policies are already included in the migration.
+## Konfiguracja lokalna
 
-### 4. Configure environment variables
+### Wymagania
 
-Copy `.env.local.example` to `.env.local` and fill in the values:
+- Node.js 20+
+- pnpm
+- Konto Supabase
+
+### 1. Klonowanie repozytorium
 
 ```bash
-cp .env.local.example .env.local
+git clone <repo-url>
+cd construction-app
+pnpm install
 ```
 
-Find the values in your Supabase Dashboard under **Project Settings** → **API**:
+### 2. Zmienne środowiskowe
+
+Utwórz plik `.env.local`:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxx...
+
+# Opcjonalnie — Sentry
+NEXT_PUBLIC_SENTRY_DSN=
+SENTRY_ORG=
+SENTRY_PROJECT=
 ```
 
-### 5. Enable magic link auth
+### 3. Migracje bazy danych
 
-In Supabase Dashboard → **Authentication** → **Providers** → **Email**:
-- Ensure **Enable Email provider** is on.
-- **Confirm email** can be left on (magic link handles it).
+W Supabase SQL Editor wykonaj migracje w kolejności:
 
-For local dev, set the **Site URL** to `http://localhost:3000` and add `http://localhost:3000/auth/callback` to **Redirect URLs**.
+```
+supabase/migrations/001_initial.sql
+supabase/migrations/002_add_roof_floor.sql
+supabase/migrations/003_add_task_fields.sql
+supabase/migrations/004_simplify_hierarchy.sql
+supabase/migrations/005_issues_contractor_photos.sql
+supabase/migrations/006_drop_severity.sql
+supabase/migrations/007_task_files.sql
+```
 
-### 6. Install dependencies and run
+### 4. Supabase Storage
+
+W panelu Supabase utwórz bucket `files` jako **Private**.
+
+### 5. Supabase Auth
+
+W panelu Supabase → **Authentication** → **URL Configuration**:
+- **Site URL**: `http://localhost:3000`
+- **Redirect URLs**: dodaj `http://localhost:3000/auth/callback`
+
+### 6. Uruchomienie
 
 ```bash
-pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to `/login`.
+Otwórz [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## Deploy to Vercel
+## Deploy na Vercel
 
-1. Push this repo to GitHub.
-2. Import in [Vercel](https://vercel.com).
-3. Add the two environment variables in **Project Settings → Environment Variables**.
-4. In Supabase Dashboard → Authentication → URL Configuration, set:
-   - **Site URL**: `https://your-vercel-domain.vercel.app`
-   - **Redirect URLs**: `https://your-vercel-domain.vercel.app/auth/callback`
+1. Wypchnij kod na GitHub
+2. Połącz repozytorium na [vercel.com](https://vercel.com)
+3. Ustaw zmienne środowiskowe w ustawieniach projektu Vercel:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+4. W Supabase → Authentication → URL Configuration, ustaw:
+   - **Site URL**: `https://twoja-domena.vercel.app`
+   - **Redirect URLs**: `https://twoja-domena.vercel.app/auth/callback`
+5. Deploy jest automatyczny po każdym pushu na `main`
 
 ---
 
-## Tech Stack
+## Screenshoty
 
-| Layer | Choice |
+| Ekran | Opis |
 |---|---|
-| Framework | Next.js 15 (App Router) |
-| Language | TypeScript (strict) |
-| Styling | Tailwind CSS + shadcn/ui |
-| Database | Supabase Postgres |
-| Auth | Supabase Auth (magic link) |
-| Storage | Supabase Storage |
-| Hosting | Vercel |
+| Login | Ekran logowania (magic link) |
+| Pulpit projektu | Lista 10 pięter z licznikami usterek i zadań |
+| Drzewo lokalizacji | Mieszkania i podfoldery z menu kontekstowym |
+| Galeria zdjęć | Upload i podgląd zdjęć z lokalizacji |
 
-See `DECISIONS.md` for architectural rationale and tradeoffs.
+---
+
+## Struktura projektu
+
+```
+app/
+  (auth)/login/         # Logowanie magic link
+  projects/             # Lista projektów
+  projects/[id]/        # Pulpit projektu (10 pięter)
+    floors/[level]/     # Widok piętra (drzewo + zadania + notatki)
+    floors/[level]/[locationId]/  # Lokalizacja (pliki + usterki)
+    inventory/          # Inwentaryzacja materiałów
+    tasks/              # Zadania globalne
+    notes/              # Notatki globalne
+components/
+  tree/                 # Drzewo lokalizacji
+  upload/               # Upload plików i galeria
+  issues/               # Usterki
+  tasks/                # Zadania
+  notes/                # Notatki
+  inventory/            # Inwentaryzacja
+lib/
+  actions/              # Server Actions (mutacje)
+  supabase/             # Klienci Supabase
+supabase/migrations/    # Migracje SQL
+public/
+  sw.js                 # Service Worker (PWA, NetworkFirst/CacheFirst)
+  manifest.json         # Web App Manifest
+```
+
+Szczegóły decyzji architektonicznych w `DECISIONS.md`.
+
+---
+
+## Licencja
+
+Projekt prywatny — tylko do użytku wewnętrznego.
