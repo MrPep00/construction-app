@@ -7,6 +7,8 @@ import { NotesPanel } from "@/components/notes/NotesPanel"
 import { FloorTabs } from "@/components/FloorTabs"
 import { FileUploader } from "@/components/upload/FileUploader"
 import { FileGrid } from "@/components/upload/FileGrid"
+import { FloorInventorySummary } from "@/components/inventory/FloorInventorySummary"
+import { FloorInventoryPanel } from "@/components/inventory/FloorInventoryPanel"
 import type { FileItem } from "@/components/upload/FileGridClient"
 
 export default async function FloorPage({
@@ -122,10 +124,14 @@ export default async function FloorPage({
         />
       </section>
 
-      {/* Tasks & Notes as tabs */}
+      {/* Material shortfalls for this floor */}
+      <FloorInventorySummary projectId={id} floorId={floor.id} />
+
+      {/* Tasks, Notes, Inventory tabs */}
       <FloorTabs
         tasks={<TaskList projectId={id} floorId={floor.id} />}
         notes={<NotesPanel projectId={id} floorId={floor.id} />}
+        inventory={<FloorInventoryPanel projectId={id} floorId={floor.id} />}
       />
     </main>
   )
