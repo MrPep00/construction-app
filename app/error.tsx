@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 
 export default function Error({
@@ -10,8 +10,26 @@ export default function Error({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  const reportedRef = useRef(false)
+
   useEffect(() => {
+    if (reportedRef.current) return
+    reportedRef.current = true
+
     console.error(error)
+
+    fetch("/api/log-client-error", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: error.message,
+        stack: error.stack,
+        route:
+          typeof window !== "undefined" ? window.location.pathname : undefined,
+      }),
+    }).catch(() => {
+      // Ignore — already console.errored above
+    })
   }, [error])
 
   return (

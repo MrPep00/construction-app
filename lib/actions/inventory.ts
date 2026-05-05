@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
+import { logError } from "@/lib/logging/log-error"
 import type { MovementReason } from "@/lib/types/db"
 
 const reasonEnum = z.enum(["delivery", "consumption", "correction"])
@@ -57,8 +58,13 @@ export async function createItem(input: {
 
     revalidatePath(`/projects/${parsed.data.projectId}/inventory`)
     return { data: { id: item.id } }
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Nieoczekiwany błąd" }
+  } catch (error) {
+    await logError({
+      error,
+      actionName: "createItem",
+      context: { projectId: input.projectId },
+    })
+    return { error: "Nie udało się dodać pozycji" }
   }
 }
 
@@ -84,8 +90,13 @@ export async function deleteItem(id: string): Promise<{ data?: boolean; error?: 
 
     revalidatePath(`/projects/${item.project_id}/inventory`)
     return { data: true }
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Nieoczekiwany błąd" }
+  } catch (error) {
+    await logError({
+      error,
+      actionName: "deleteItem",
+      context: { itemId: id },
+    })
+    return { error: "Nie udało się usunąć pozycji" }
   }
 }
 
@@ -128,8 +139,13 @@ export async function updateRequired(input: {
 
     revalidatePath(`/projects/${item.project_id}/inventory`)
     return { data: true }
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Nieoczekiwany błąd" }
+  } catch (error) {
+    await logError({
+      error,
+      actionName: "updateRequired",
+      context: { itemId: input.itemId, floorId: input.floorId },
+    })
+    return { error: "Nie udało się zaktualizować zapotrzebowania" }
   }
 }
 
@@ -209,7 +225,12 @@ export async function recordMovement(input: {
     }
 
     return { data: true }
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Nieoczekiwany błąd" }
+  } catch (error) {
+    await logError({
+      error,
+      actionName: "recordMovement",
+      context: { itemId: input.itemId, floorId: input.floorId, reason: input.reason },
+    })
+    return { error: "Nie udało się zarejestrować ruchu magazynowego" }
   }
 }

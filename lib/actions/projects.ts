@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
+import { logError } from "@/lib/logging/log-error"
 
 const createProjectSchema = z.object({
   name: z
@@ -12,40 +13,50 @@ const createProjectSchema = z.object({
 })
 
 export async function createProject(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  const parsed = createProjectSchema.safeParse({ name: formData.get("name") })
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Nieprawidłowe dane" }
+    const parsed = createProjectSchema.safeParse({ name: formData.get("name") })
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Nieprawidłowe dane" }
+    }
+
+    const { data, error } = await supabase
+      .from("projects")
+      .insert({ name: parsed.data.name, owner_id: user.id })
+      .select("id")
+      .single()
+
+    if (error) return { error: error.message }
+
+    revalidatePath("/projects")
+    return { data: { id: data.id } }
+  } catch (error) {
+    await logError({ error, actionName: "createProject" })
+    return { error: "Nie udało się utworzyć projektu" }
   }
-
-  const { data, error } = await supabase
-    .from("projects")
-    .insert({ name: parsed.data.name, owner_id: user.id })
-    .select("id")
-    .single()
-
-  if (error) return { error: error.message }
-
-  revalidatePath("/projects")
-  return { data: { id: data.id } }
 }
 
 export async function deleteProject(id: string) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  const { error } = await supabase.from("projects").delete().eq("id", id)
+    const { error } = await supabase.from("projects").delete().eq("id", id)
 
-  if (error) return { error: error.message }
+    if (error) return { error: error.message }
 
-  revalidatePath("/projects")
-  return { data: true }
+    revalidatePath("/projects")
+    return { data: true }
+  } catch (error) {
+    await logError({ error, actionName: "deleteProject", context: { projectId: id } })
+    return { error: "Nie udało się usunąć projektu" }
+  }
 }

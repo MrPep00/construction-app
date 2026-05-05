@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { randomUUID } from "crypto"
 import { createClient } from "@/lib/supabase/server"
+import { logError } from "@/lib/logging/log-error"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
 
@@ -69,30 +70,35 @@ export async function createUploadPath(
   mimeType: string,
   sizeBytes: number,
 ) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  if (sizeBytes > MAX_FILE_SIZE) {
-    return { error: `Plik "${filename}" jest za duży (max 50 MB)` }
+    if (sizeBytes > MAX_FILE_SIZE) {
+      return { error: `Plik "${filename}" jest za duży (max 50 MB)` }
+    }
+    if (!isAllowedFile(filename, mimeType)) {
+      return { error: `Nieobsługiwany typ pliku: ${filename}` }
+    }
+
+    const uuid = randomUUID()
+    const sanitized = sanitizeFilename(filename)
+    const storagePath = `${user.id}/${locationId}/${uuid}-${sanitized}`
+
+    const { data, error } = await supabase.storage
+      .from("files")
+      .createSignedUploadUrl(storagePath)
+
+    if (error) return { error: error.message }
+
+    return { data: { signedUrl: data.signedUrl, path: storagePath, token: data.token } }
+  } catch (error) {
+    await logError({ error, actionName: "createUploadPath", context: { locationId } })
+    return { error: "Nie udało się przygotować uploadu" }
   }
-  if (!isAllowedFile(filename, mimeType)) {
-    return { error: `Nieobsługiwany typ pliku: ${filename}` }
-  }
-
-  const uuid = randomUUID()
-  const sanitized = sanitizeFilename(filename)
-  const storagePath = `${user.id}/${locationId}/${uuid}-${sanitized}`
-
-  const { data, error } = await supabase.storage
-    .from("files")
-    .createSignedUploadUrl(storagePath)
-
-  if (error) return { error: error.message }
-
-  return { data: { signedUrl: data.signedUrl, path: storagePath, token: data.token } }
 }
 
 export async function createUploadPathForFloor(
@@ -101,21 +107,26 @@ export async function createUploadPathForFloor(
   mimeType: string,
   sizeBytes: number,
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  if (sizeBytes > MAX_FILE_SIZE) return { error: `Plik "${filename}" jest za duży (max 50 MB)` }
-  if (!isAllowedFile(filename, mimeType)) return { error: `Nieobsługiwany typ pliku: ${filename}` }
+    if (sizeBytes > MAX_FILE_SIZE) return { error: `Plik "${filename}" jest za duży (max 50 MB)` }
+    if (!isAllowedFile(filename, mimeType)) return { error: `Nieobsługiwany typ pliku: ${filename}` }
 
-  const uuid = randomUUID()
-  const sanitized = sanitizeFilename(filename)
-  const storagePath = `${user.id}/floors/${floorId}/${uuid}-${sanitized}`
+    const uuid = randomUUID()
+    const sanitized = sanitizeFilename(filename)
+    const storagePath = `${user.id}/floors/${floorId}/${uuid}-${sanitized}`
 
-  const { data, error } = await supabase.storage.from("files").createSignedUploadUrl(storagePath)
-  if (error) return { error: error.message }
+    const { data, error } = await supabase.storage.from("files").createSignedUploadUrl(storagePath)
+    if (error) return { error: error.message }
 
-  return { data: { signedUrl: data.signedUrl, path: storagePath, token: data.token } }
+    return { data: { signedUrl: data.signedUrl, path: storagePath, token: data.token } }
+  } catch (error) {
+    await logError({ error, actionName: "createUploadPathForFloor", context: { floorId } })
+    return { error: "Nie udało się przygotować uploadu" }
+  }
 }
 
 export async function finalizeFileUpload(
@@ -125,34 +136,39 @@ export async function finalizeFileUpload(
   mimeType: string,
   sizeBytes: number,
 ) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  const { data, error: dbError } = await supabase
-    .from("files")
-    .insert({
-      location_id: locationId,
-      name: filename,
-      storage_path: storagePath,
-      mime_type: mimeType || "application/octet-stream",
-      size_bytes: sizeBytes,
-      uploaded_by: user.id,
-    })
-    .select()
-    .single()
+    const { data, error: dbError } = await supabase
+      .from("files")
+      .insert({
+        location_id: locationId,
+        name: filename,
+        storage_path: storagePath,
+        mime_type: mimeType || "application/octet-stream",
+        size_bytes: sizeBytes,
+        uploaded_by: user.id,
+      })
+      .select()
+      .single()
 
-  if (dbError) {
-    await supabase.storage.from("files").remove([storagePath])
-    return { error: dbError.message }
+    if (dbError) {
+      await supabase.storage.from("files").remove([storagePath])
+      return { error: dbError.message }
+    }
+
+    const path = await resolveLocationPath(supabase, locationId)
+    if (path) revalidatePath(path)
+
+    return { data }
+  } catch (error) {
+    await logError({ error, actionName: "finalizeFileUpload", context: { locationId } })
+    return { error: "Nie udało się zapisać pliku" }
   }
-
-  const path = await resolveLocationPath(supabase, locationId)
-  if (path) revalidatePath(path)
-
-  return { data }
 }
 
 export async function finalizeFileUploadForFloor(
@@ -162,221 +178,246 @@ export async function finalizeFileUploadForFloor(
   mimeType: string,
   sizeBytes: number,
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  const { data, error: dbError } = await supabase
-    .from("files")
-    .insert({
-      floor_id: floorId,
-      name: filename,
-      storage_path: storagePath,
-      mime_type: mimeType || "application/octet-stream",
-      size_bytes: sizeBytes,
-      uploaded_by: user.id,
-    })
-    .select()
-    .single()
+    const { data, error: dbError } = await supabase
+      .from("files")
+      .insert({
+        floor_id: floorId,
+        name: filename,
+        storage_path: storagePath,
+        mime_type: mimeType || "application/octet-stream",
+        size_bytes: sizeBytes,
+        uploaded_by: user.id,
+      })
+      .select()
+      .single()
 
-  if (dbError) {
-    await supabase.storage.from("files").remove([storagePath])
-    return { error: dbError.message }
+    if (dbError) {
+      await supabase.storage.from("files").remove([storagePath])
+      return { error: dbError.message }
+    }
+
+    const path = await resolveFloorPath(supabase, floorId)
+    if (path) revalidatePath(path)
+
+    return { data }
+  } catch (error) {
+    await logError({ error, actionName: "finalizeFileUploadForFloor", context: { floorId } })
+    return { error: "Nie udało się zapisać pliku" }
   }
-
-  const path = await resolveFloorPath(supabase, floorId)
-  if (path) revalidatePath(path)
-
-  return { data }
 }
 
 export async function uploadFile(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  const file = formData.get("file")
-  const locationId = formData.get("locationId")
+    const file = formData.get("file")
+    const locationId = formData.get("locationId")
 
-  if (!(file instanceof File)) return { error: "Brak pliku" }
-  if (typeof locationId !== "string" || !locationId) return { error: "Brak lokalizacji" }
+    if (!(file instanceof File)) return { error: "Brak pliku" }
+    if (typeof locationId !== "string" || !locationId) return { error: "Brak lokalizacji" }
 
-  if (file.size > MAX_FILE_SIZE) {
-    return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
+    if (file.size > MAX_FILE_SIZE) {
+      return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
+    }
+    if (!isAllowedFile(file.name, file.type)) {
+      return { error: `Nieobsługiwany typ pliku: ${file.name}` }
+    }
+
+    const uuid = randomUUID()
+    const sanitized = sanitizeFilename(file.name)
+    const storagePath = `${user.id}/${locationId}/${uuid}-${sanitized}`
+
+    const { error: uploadError } = await supabase.storage
+      .from("files")
+      .upload(storagePath, file, {
+        contentType: file.type || "application/octet-stream",
+      })
+
+    if (uploadError) return { error: uploadError.message }
+
+    const { data, error: dbError } = await supabase
+      .from("files")
+      .insert({
+        location_id: locationId,
+        name: file.name,
+        storage_path: storagePath,
+        mime_type: file.type || "application/octet-stream",
+        size_bytes: file.size,
+        uploaded_by: user.id,
+      })
+      .select()
+      .single()
+
+    if (dbError) {
+      await supabase.storage.from("files").remove([storagePath])
+      return { error: dbError.message }
+    }
+
+    const path = await resolveLocationPath(supabase, locationId)
+    if (path) revalidatePath(path)
+
+    return { data }
+  } catch (error) {
+    await logError({ error, actionName: "uploadFile" })
+    return { error: "Nie udało się wgrać pliku" }
   }
-  if (!isAllowedFile(file.name, file.type)) {
-    return { error: `Nieobsługiwany typ pliku: ${file.name}` }
-  }
-
-  const uuid = randomUUID()
-  const sanitized = sanitizeFilename(file.name)
-  const storagePath = `${user.id}/${locationId}/${uuid}-${sanitized}`
-
-  const { error: uploadError } = await supabase.storage
-    .from("files")
-    .upload(storagePath, file, {
-      contentType: file.type || "application/octet-stream",
-    })
-
-  if (uploadError) return { error: uploadError.message }
-
-  const { data, error: dbError } = await supabase
-    .from("files")
-    .insert({
-      location_id: locationId,
-      name: file.name,
-      storage_path: storagePath,
-      mime_type: file.type || "application/octet-stream",
-      size_bytes: file.size,
-      uploaded_by: user.id,
-    })
-    .select()
-    .single()
-
-  if (dbError) {
-    await supabase.storage.from("files").remove([storagePath])
-    return { error: dbError.message }
-  }
-
-  const path = await resolveLocationPath(supabase, locationId)
-  if (path) revalidatePath(path)
-
-  return { data }
 }
 
 export async function uploadIssuePhoto(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  const file = formData.get("file")
-  const locationId = formData.get("locationId")
-  const issueId = formData.get("issueId")
+    const file = formData.get("file")
+    const locationId = formData.get("locationId")
+    const issueId = formData.get("issueId")
 
-  if (!(file instanceof File)) return { error: "Brak pliku" }
-  if (typeof locationId !== "string" || !locationId) return { error: "Brak lokalizacji" }
-  if (typeof issueId !== "string" || !issueId) return { error: "Brak ID usterki" }
+    if (!(file instanceof File)) return { error: "Brak pliku" }
+    if (typeof locationId !== "string" || !locationId) return { error: "Brak lokalizacji" }
+    if (typeof issueId !== "string" || !issueId) return { error: "Brak ID usterki" }
 
-  if (file.size > MAX_FILE_SIZE) return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
-  if (!file.type.startsWith("image/")) return { error: "Tylko zdjęcia są dozwolone" }
+    if (file.size > MAX_FILE_SIZE) return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
+    if (!file.type.startsWith("image/")) return { error: "Tylko zdjęcia są dozwolone" }
 
-  const uuid = randomUUID()
-  const sanitized = sanitizeFilename(file.name)
-  const storagePath = `${user.id}/${locationId}/${uuid}-${sanitized}`
+    const uuid = randomUUID()
+    const sanitized = sanitizeFilename(file.name)
+    const storagePath = `${user.id}/${locationId}/${uuid}-${sanitized}`
 
-  const { error: uploadError } = await supabase.storage
-    .from("files")
-    .upload(storagePath, file, { contentType: file.type })
+    const { error: uploadError } = await supabase.storage
+      .from("files")
+      .upload(storagePath, file, { contentType: file.type })
 
-  if (uploadError) return { error: uploadError.message }
+    if (uploadError) return { error: uploadError.message }
 
-  const { data, error: dbError } = await supabase
-    .from("files")
-    .insert({
-      location_id: locationId,
-      issue_id: issueId,
-      name: file.name,
-      storage_path: storagePath,
-      mime_type: file.type,
-      size_bytes: file.size,
-      uploaded_by: user.id,
-    })
-    .select("id")
-    .single()
+    const { data, error: dbError } = await supabase
+      .from("files")
+      .insert({
+        location_id: locationId,
+        issue_id: issueId,
+        name: file.name,
+        storage_path: storagePath,
+        mime_type: file.type,
+        size_bytes: file.size,
+        uploaded_by: user.id,
+      })
+      .select("id")
+      .single()
 
-  if (dbError) {
-    await supabase.storage.from("files").remove([storagePath])
-    return { error: dbError.message }
+    if (dbError) {
+      await supabase.storage.from("files").remove([storagePath])
+      return { error: dbError.message }
+    }
+
+    return { data }
+  } catch (error) {
+    await logError({ error, actionName: "uploadIssuePhoto" })
+    return { error: "Nie udało się wgrać zdjęcia" }
   }
-
-  return { data }
 }
 
 export async function uploadFileForTask(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  const file = formData.get("file")
-  const taskId = formData.get("taskId")
+    const file = formData.get("file")
+    const taskId = formData.get("taskId")
 
-  if (!(file instanceof File)) return { error: "Brak pliku" }
-  if (typeof taskId !== "string" || !taskId) return { error: "Brak ID zadania" }
+    if (!(file instanceof File)) return { error: "Brak pliku" }
+    if (typeof taskId !== "string" || !taskId) return { error: "Brak ID zadania" }
 
-  if (file.size > MAX_FILE_SIZE) {
-    return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
+    if (file.size > MAX_FILE_SIZE) {
+      return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
+    }
+    if (!isAllowedFile(file.name, file.type)) {
+      return { error: `Nieobsługiwany typ pliku: ${file.name}` }
+    }
+
+    const uuid = randomUUID()
+    const sanitized = sanitizeFilename(file.name)
+    const storagePath = `${user.id}/tasks/${taskId}/${uuid}-${sanitized}`
+
+    const { error: uploadError } = await supabase.storage
+      .from("files")
+      .upload(storagePath, file, {
+        contentType: file.type || "application/octet-stream",
+      })
+
+    if (uploadError) return { error: uploadError.message }
+
+    const { data, error: dbError } = await supabase
+      .from("files")
+      .insert({
+        task_id: taskId,
+        name: file.name,
+        storage_path: storagePath,
+        mime_type: file.type || "application/octet-stream",
+        size_bytes: file.size,
+        uploaded_by: user.id,
+      })
+      .select("id")
+      .single()
+
+    if (dbError) {
+      await supabase.storage.from("files").remove([storagePath])
+      return { error: dbError.message }
+    }
+
+    return { data }
+  } catch (error) {
+    await logError({ error, actionName: "uploadFileForTask" })
+    return { error: "Nie udało się wgrać pliku" }
   }
-  if (!isAllowedFile(file.name, file.type)) {
-    return { error: `Nieobsługiwany typ pliku: ${file.name}` }
-  }
-
-  const uuid = randomUUID()
-  const sanitized = sanitizeFilename(file.name)
-  const storagePath = `${user.id}/tasks/${taskId}/${uuid}-${sanitized}`
-
-  const { error: uploadError } = await supabase.storage
-    .from("files")
-    .upload(storagePath, file, {
-      contentType: file.type || "application/octet-stream",
-    })
-
-  if (uploadError) return { error: uploadError.message }
-
-  const { data, error: dbError } = await supabase
-    .from("files")
-    .insert({
-      task_id: taskId,
-      name: file.name,
-      storage_path: storagePath,
-      mime_type: file.type || "application/octet-stream",
-      size_bytes: file.size,
-      uploaded_by: user.id,
-    })
-    .select("id")
-    .single()
-
-  if (dbError) {
-    await supabase.storage.from("files").remove([storagePath])
-    return { error: dbError.message }
-  }
-
-  return { data }
 }
 
 export async function deleteFile(id: string) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  const { data: file } = await supabase
-    .from("files")
-    .select("id, storage_path, location_id, floor_id, task_id")
-    .eq("id", id)
-    .single()
+    const { data: file } = await supabase
+      .from("files")
+      .select("id, storage_path, location_id, floor_id, task_id")
+      .eq("id", id)
+      .single()
 
-  if (!file) return { error: "Plik nie znaleziony" }
+    if (!file) return { error: "Plik nie znaleziony" }
 
-  // Best-effort storage deletion — proceed to DB cleanup even if it fails
-  await supabase.storage.from("files").remove([file.storage_path])
+    // Best-effort storage deletion — proceed to DB cleanup even if it fails
+    await supabase.storage.from("files").remove([file.storage_path])
 
-  const { error: dbError } = await supabase.from("files").delete().eq("id", id)
-  if (dbError) return { error: dbError.message }
+    const { error: dbError } = await supabase.from("files").delete().eq("id", id)
+    if (dbError) return { error: dbError.message }
 
-  if (file.location_id) {
-    const path = await resolveLocationPath(supabase, file.location_id)
-    if (path) revalidatePath(path)
-  } else if (file.floor_id) {
-    const path = await resolveFloorPath(supabase, file.floor_id)
-    if (path) revalidatePath(path)
+    if (file.location_id) {
+      const path = await resolveLocationPath(supabase, file.location_id)
+      if (path) revalidatePath(path)
+    } else if (file.floor_id) {
+      const path = await resolveFloorPath(supabase, file.floor_id)
+      if (path) revalidatePath(path)
+    }
+
+    return { data: true }
+  } catch (error) {
+    await logError({ error, actionName: "deleteFile", context: { fileId: id } })
+    return { error: "Nie udało się usunąć pliku" }
   }
-
-  return { data: true }
 }

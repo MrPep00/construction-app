@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
+import { logError } from "@/lib/logging/log-error"
 
 async function revalidateNotePaths(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -28,95 +29,122 @@ export async function createNote(input: {
   floorId?: string | null
   content: string
 }): Promise<{ data?: { id: string }; error?: string }> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  const schema = z.object({
-    projectId: z.string().uuid(),
-    floorId: z.string().uuid().nullable().optional(),
-    content: z.string().min(1, "Treść jest wymagana").max(5000, "Treść za długa"),
-  })
-  const parsed = schema.safeParse(input)
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Nieprawidłowe dane" }
-  }
-
-  const { data, error } = await supabase
-    .from("notes")
-    .insert({
-      project_id: parsed.data.projectId,
-      floor_id: parsed.data.floorId ?? null,
-      body: parsed.data.content,
-      created_by: user.id,
+    const schema = z.object({
+      projectId: z.string().uuid(),
+      floorId: z.string().uuid().nullable().optional(),
+      content: z.string().min(1, "Treść jest wymagana").max(5000, "Treść za długa"),
     })
-    .select("id")
-    .single()
+    const parsed = schema.safeParse(input)
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Nieprawidłowe dane" }
+    }
 
-  if (error) return { error: error.message }
+    const { data, error } = await supabase
+      .from("notes")
+      .insert({
+        project_id: parsed.data.projectId,
+        floor_id: parsed.data.floorId ?? null,
+        body: parsed.data.content,
+        created_by: user.id,
+      })
+      .select("id")
+      .single()
 
-  await revalidateNotePaths(supabase, parsed.data.projectId, parsed.data.floorId ?? null)
-  return { data: { id: data.id } }
+    if (error) return { error: error.message }
+
+    await revalidateNotePaths(supabase, parsed.data.projectId, parsed.data.floorId ?? null)
+    return { data: { id: data.id } }
+  } catch (error) {
+    await logError({
+      error,
+      actionName: "createNote",
+      context: { projectId: input.projectId },
+    })
+    return { error: "Nie udało się dodać notatki" }
+  }
 }
 
 export async function updateNote(
   id: string,
   content: string
 ): Promise<{ data?: boolean; error?: string }> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  if (!z.string().uuid().safeParse(id).success) return { error: "Nieprawidłowe ID" }
+    if (!z.string().uuid().safeParse(id).success) return { error: "Nieprawidłowe ID" }
 
-  const parsed = z
-    .string()
-    .min(1, "Treść jest wymagana")
-    .max(5000, "Treść za długa")
-    .safeParse(content)
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Nieprawidłowe dane" }
+    const parsed = z
+      .string()
+      .min(1, "Treść jest wymagana")
+      .max(5000, "Treść za długa")
+      .safeParse(content)
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Nieprawidłowe dane" }
+    }
+
+    const { data: note } = await supabase
+      .from("notes")
+      .select("project_id, floor_id")
+      .eq("id", id)
+      .single()
+    if (!note) return { error: "Notatka nie istnieje" }
+
+    const { error } = await supabase.from("notes").update({ body: parsed.data }).eq("id", id)
+    if (error) return { error: error.message }
+
+    await revalidateNotePaths(supabase, note.project_id, note.floor_id)
+    return { data: true }
+  } catch (error) {
+    await logError({
+      error,
+      actionName: "updateNote",
+      context: { noteId: id },
+    })
+    return { error: "Nie udało się zaktualizować notatki" }
   }
-
-  const { data: note } = await supabase
-    .from("notes")
-    .select("project_id, floor_id")
-    .eq("id", id)
-    .single()
-  if (!note) return { error: "Notatka nie istnieje" }
-
-  const { error } = await supabase.from("notes").update({ body: parsed.data }).eq("id", id)
-  if (error) return { error: error.message }
-
-  await revalidateNotePaths(supabase, note.project_id, note.floor_id)
-  return { data: true }
 }
 
 export async function deleteNote(
   id: string
 ): Promise<{ data?: boolean; error?: string }> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: "Nie zalogowany" }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
 
-  if (!z.string().uuid().safeParse(id).success) return { error: "Nieprawidłowe ID" }
+    if (!z.string().uuid().safeParse(id).success) return { error: "Nieprawidłowe ID" }
 
-  const { data: note } = await supabase
-    .from("notes")
-    .select("project_id, floor_id")
-    .eq("id", id)
-    .single()
-  if (!note) return { error: "Notatka nie istnieje" }
+    const { data: note } = await supabase
+      .from("notes")
+      .select("project_id, floor_id")
+      .eq("id", id)
+      .single()
+    if (!note) return { error: "Notatka nie istnieje" }
 
-  const { error } = await supabase.from("notes").delete().eq("id", id)
-  if (error) return { error: error.message }
+    const { error } = await supabase.from("notes").delete().eq("id", id)
+    if (error) return { error: error.message }
 
-  await revalidateNotePaths(supabase, note.project_id, note.floor_id)
-  return { data: true }
+    await revalidateNotePaths(supabase, note.project_id, note.floor_id)
+    return { data: true }
+  } catch (error) {
+    await logError({
+      error,
+      actionName: "deleteNote",
+      context: { noteId: id },
+    })
+    return { error: "Nie udało się usunąć notatki" }
+  }
 }
