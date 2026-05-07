@@ -46,13 +46,14 @@ export function LoginForm({ callbackNext }: LoginFormProps = {}) {
       email,
       options: {
         emailRedirectTo: callbackUrl,
+        shouldCreateUser: true,
       },
     })
 
     setLoading(false)
 
     if (error) {
-      toast.error("Nie udało się wysłać linku. Sprawdź adres email i spróbuj ponownie.")
+      toast.error(error.message || "Nie udało się wysłać linku. Sprawdź adres email i spróbuj ponownie.")
       return
     }
 
