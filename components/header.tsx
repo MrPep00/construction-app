@@ -24,17 +24,25 @@ export async function Header() {
     <header className="sticky top-0 z-50 border-b bg-background">
       <div className="flex h-14 items-center justify-end gap-3 px-4">
         {adminUser && (
-          <Link
-            href="/admin/errors"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Logi błędów
-            {unresolvedCount > 0 && (
-              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white">
-                {unresolvedCount}
-              </span>
-            )}
-          </Link>
+          <>
+            <Link
+              href="/team"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Zespół
+            </Link>
+            <Link
+              href="/admin/errors"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Logi błędów
+              {unresolvedCount > 0 && (
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white">
+                  {unresolvedCount}
+                </span>
+              )}
+            </Link>
+          </>
         )}
         <SignOutButton />
       </div>

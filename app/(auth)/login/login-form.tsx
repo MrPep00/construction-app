@@ -15,7 +15,13 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-export function LoginForm() {
+interface LoginFormProps {
+  // When provided, the magic-link callback will redirect to this path
+  // instead of the default /projects. Used by /invite/[token] pages.
+  callbackNext?: string
+}
+
+export function LoginForm({ callbackNext }: LoginFormProps = {}) {
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
@@ -32,10 +38,14 @@ export function LoginForm() {
     setLoading(true)
 
     const supabase = createClient()
+    const callbackUrl = callbackNext
+      ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(callbackNext)}`
+      : `${window.location.origin}/auth/callback`
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: callbackUrl,
       },
     })
 

@@ -25,9 +25,24 @@ export async function createProject(formData: FormData) {
       return { error: parsed.error.issues[0]?.message ?? "Nieprawidłowe dane" }
     }
 
+    // Resolve the user's team — required by team-based RLS
+    const { data: membership } = await supabase
+      .from("team_members")
+      .select("team_id")
+      .eq("user_id", user.id)
+      .order("joined_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (!membership) return { error: "Nie jesteś przypisany do żadnego zespołu" }
+
     const { data, error } = await supabase
       .from("projects")
-      .insert({ name: parsed.data.name, owner_id: user.id })
+      .insert({
+        name: parsed.data.name,
+        owner_id: user.id,
+        team_id: membership.team_id,
+      })
       .select("id")
       .single()
 
