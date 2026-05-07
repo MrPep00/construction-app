@@ -40,7 +40,6 @@ export async function createProject(formData: FormData) {
       .from("projects")
       .insert({
         name: parsed.data.name,
-        owner_id: user.id,
         team_id: membership.team_id,
       })
       .select("id")
