@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { resolveFileUrls } from "@/lib/storage"
 import { TYPE_ICONS } from "@/components/tree/LocationNode"
 import { AddChildButton } from "@/components/tree/AddChildButton"
 import { FileUploader } from "@/components/upload/FileUploader"
@@ -55,7 +56,7 @@ export default async function LocationPage({
         .order("created_at", { ascending: false }),
       supabase
         .from("files")
-        .select("id, name, mime_type, size_bytes, created_at, storage_path")
+        .select("id, name, mime_type, size_bytes, created_at, storage_path, storage_provider")
         .eq("location_id", locationId)
         .order("created_at", { ascending: false }),
       supabase
@@ -67,16 +68,16 @@ export default async function LocationPage({
 
   let fileItems: import("@/components/upload/FileGridClient").FileItem[] = []
   if (filesData && filesData.length > 0) {
-    const paths = filesData.map((f) => f.storage_path)
-    const { data: signedUrls } = await supabase.storage
-      .from("files")
-      .createSignedUrls(paths, 3600)
-    const urlMap = new Map<string, string>()
-    signedUrls?.forEach(({ path, signedUrl }) => {
-      if (path && signedUrl) urlMap.set(path, signedUrl)
-    })
+    const urlMap = await resolveFileUrls(
+      filesData.map((f) => ({
+        storage_path: f.storage_path,
+        storage_provider: (f.storage_provider ?? "supabase") as "supabase" | "r2",
+      })),
+      supabase
+    )
     fileItems = filesData.map((f) => ({
       ...f,
+      storage_provider: f.storage_provider ?? "supabase",
       signedUrl: urlMap.get(f.storage_path) ?? null,
     }))
   }

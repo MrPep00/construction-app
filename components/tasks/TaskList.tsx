@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { resolveFileUrls } from "@/lib/storage"
 import { TaskListClient, type TaskRow } from "./TaskListClient"
 import type { FileItem } from "@/components/upload/FileGridClient"
 
@@ -30,20 +31,18 @@ export async function TaskList({ projectId, floorId }: Props) {
     const taskIds = rawTasks.map((t) => t.id)
     const { data: filesData } = await supabase
       .from("files")
-      .select("id, name, mime_type, size_bytes, created_at, storage_path, task_id")
+      .select("id, name, mime_type, size_bytes, created_at, storage_path, storage_provider, task_id")
       .in("task_id", taskIds)
       .order("created_at", { ascending: true })
 
     if (filesData && filesData.length > 0) {
-      const paths = filesData.map((f) => f.storage_path)
-      const { data: signedUrls } = await supabase.storage
-        .from("files")
-        .createSignedUrls(paths, 3600)
-
-      const urlMap = new Map<string, string>()
-      signedUrls?.forEach(({ path, signedUrl }) => {
-        if (path && signedUrl) urlMap.set(path, signedUrl)
-      })
+      const urlMap = await resolveFileUrls(
+        filesData.map((f) => ({
+          storage_path: f.storage_path,
+          storage_provider: (f.storage_provider ?? "supabase") as "supabase" | "r2",
+        })),
+        supabase
+      )
 
       for (const f of filesData) {
         if (!f.task_id) continue
@@ -54,6 +53,7 @@ export async function TaskList({ projectId, floorId }: Props) {
           size_bytes: f.size_bytes,
           created_at: f.created_at,
           storage_path: f.storage_path,
+          storage_provider: f.storage_provider ?? "supabase",
           signedUrl: urlMap.get(f.storage_path) ?? null,
         }
         const existing = filesMap.get(f.task_id) ?? []

@@ -19,8 +19,6 @@ import {
   createUploadPathForFloor,
   finalizeFileUploadForFloor,
 } from "@/lib/actions/files"
-import { createClient } from "@/lib/supabase/client"
-
 type ItemStatus = "pending" | "uploading" | "done" | "error"
 
 type UploadItem = {
@@ -92,8 +90,6 @@ export function FileUploader({ locationId, floorId, defaultOpen = false, onDone 
       )
     )
 
-    const supabase = createClient()
-
     const results = await Promise.all(
       pendingItems.map(async (item) => {
         const mimeType = item.file.type || "application/octet-stream"
@@ -109,17 +105,20 @@ export function FileUploader({ locationId, floorId, defaultOpen = false, onDone 
           return { name: item.file.name, error: urlResult.error ?? "Błąd serwera" }
         }
 
-        const { path, token } = urlResult.data
+        const { signedUrl: putUrl, path } = urlResult.data
 
-        const { error: storageError } = await supabase.storage
-          .from("files")
-          .uploadToSignedUrl(path, token, item.file, { contentType: mimeType })
+        // Direct PUT to R2 via presigned URL (no SDK needed on client)
+        const uploadResp = await fetch(putUrl, {
+          method: "PUT",
+          body: item.file,
+          headers: { "Content-Type": mimeType },
+        })
 
-        if (storageError) {
+        if (!uploadResp.ok) {
           setItems((prev) =>
             prev.map((i) => i.id === item.id ? { ...i, status: "error" as const } : i)
           )
-          return { name: item.file.name, error: storageError.message }
+          return { name: item.file.name, error: `Upload nieudany (${uploadResp.status})` }
         }
 
         const finalResult = floorId

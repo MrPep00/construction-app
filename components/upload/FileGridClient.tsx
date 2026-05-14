@@ -20,6 +20,7 @@ export type FileItem = {
   size_bytes: number
   created_at: string
   storage_path: string
+  storage_provider: string
   signedUrl: string | null
 }
 

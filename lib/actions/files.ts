@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { randomUUID } from "crypto"
 import { createClient } from "@/lib/supabase/server"
 import { logError } from "@/lib/logging/log-error"
+import { getR2PresignedPutUrl, uploadToR2, deleteFromR2 } from "@/lib/storage/r2"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
 
@@ -25,9 +26,22 @@ function isAllowedFile(name: string, mimeType: string): boolean {
 
 function sanitizeFilename(name: string): string {
   return name
-    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "_")
     .replace(/_{2,}/g, "_")
-    .slice(0, 100)
+    .slice(0, 200)
+}
+
+async function getTeamId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<string> {
+  const { data } = await supabase
+    .from("team_members")
+    .select("team_id")
+    .eq("user_id", userId)
+    .single()
+  return data?.team_id ?? userId
 }
 
 async function resolveLocationPath(
@@ -64,6 +78,9 @@ async function resolveFloorPath(
   return `/projects/${floor.project_id}/floors/${floor.level}`
 }
 
+// ─── Two-step upload (client-direct-to-R2) ───────────────────────────────────
+// Step 1: get presigned PUT URL. Step 2: client PUTs file. Step 3: finalize DB row.
+
 export async function createUploadPath(
   locationId: string,
   filename: string,
@@ -72,29 +89,20 @@ export async function createUploadPath(
 ) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: "Nie zalogowany" }
 
-    if (sizeBytes > MAX_FILE_SIZE) {
-      return { error: `Plik "${filename}" jest za duży (max 50 MB)` }
-    }
-    if (!isAllowedFile(filename, mimeType)) {
-      return { error: `Nieobsługiwany typ pliku: ${filename}` }
-    }
+    if (sizeBytes > MAX_FILE_SIZE) return { error: `Plik "${filename}" jest za duży (max 50 MB)` }
+    if (!isAllowedFile(filename, mimeType)) return { error: `Nieobsługiwany typ pliku: ${filename}` }
 
+    const teamId = await getTeamId(supabase, user.id)
     const uuid = randomUUID()
     const sanitized = sanitizeFilename(filename)
-    const storagePath = `${user.id}/${locationId}/${uuid}-${sanitized}`
+    const storagePath = `${teamId}/${locationId}/${uuid}-${sanitized}`
 
-    const { data, error } = await supabase.storage
-      .from("files")
-      .createSignedUploadUrl(storagePath)
+    const signedUrl = await getR2PresignedPutUrl(storagePath, mimeType || "application/octet-stream")
 
-    if (error) return { error: error.message }
-
-    return { data: { signedUrl: data.signedUrl, path: storagePath, token: data.token } }
+    return { data: { signedUrl, path: storagePath } }
   } catch (error) {
     await logError({ error, actionName: "createUploadPath", context: { locationId } })
     return { error: "Nie udało się przygotować uploadu" }
@@ -115,14 +123,14 @@ export async function createUploadPathForFloor(
     if (sizeBytes > MAX_FILE_SIZE) return { error: `Plik "${filename}" jest za duży (max 50 MB)` }
     if (!isAllowedFile(filename, mimeType)) return { error: `Nieobsługiwany typ pliku: ${filename}` }
 
+    const teamId = await getTeamId(supabase, user.id)
     const uuid = randomUUID()
     const sanitized = sanitizeFilename(filename)
-    const storagePath = `${user.id}/floors/${floorId}/${uuid}-${sanitized}`
+    const storagePath = `${teamId}/floors/${floorId}/${uuid}-${sanitized}`
 
-    const { data, error } = await supabase.storage.from("files").createSignedUploadUrl(storagePath)
-    if (error) return { error: error.message }
+    const signedUrl = await getR2PresignedPutUrl(storagePath, mimeType || "application/octet-stream")
 
-    return { data: { signedUrl: data.signedUrl, path: storagePath, token: data.token } }
+    return { data: { signedUrl, path: storagePath } }
   } catch (error) {
     await logError({ error, actionName: "createUploadPathForFloor", context: { floorId } })
     return { error: "Nie udało się przygotować uploadu" }
@@ -138,9 +146,7 @@ export async function finalizeFileUpload(
 ) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: "Nie zalogowany" }
 
     const { data, error: dbError } = await supabase
@@ -152,12 +158,13 @@ export async function finalizeFileUpload(
         mime_type: mimeType || "application/octet-stream",
         size_bytes: sizeBytes,
         uploaded_by: user.id,
+        storage_provider: "r2",
       })
       .select()
       .single()
 
     if (dbError) {
-      await supabase.storage.from("files").remove([storagePath])
+      await deleteFromR2(storagePath).catch(() => {})
       return { error: dbError.message }
     }
 
@@ -192,12 +199,13 @@ export async function finalizeFileUploadForFloor(
         mime_type: mimeType || "application/octet-stream",
         size_bytes: sizeBytes,
         uploaded_by: user.id,
+        storage_provider: "r2",
       })
       .select()
       .single()
 
     if (dbError) {
-      await supabase.storage.from("files").remove([storagePath])
+      await deleteFromR2(storagePath).catch(() => {})
       return { error: dbError.message }
     }
 
@@ -211,12 +219,12 @@ export async function finalizeFileUploadForFloor(
   }
 }
 
+// ─── Server-side full upload (FormData → R2) ─────────────────────────────────
+
 export async function uploadFile(formData: FormData) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: "Nie zalogowany" }
 
     const file = formData.get("file")
@@ -225,24 +233,17 @@ export async function uploadFile(formData: FormData) {
     if (!(file instanceof File)) return { error: "Brak pliku" }
     if (typeof locationId !== "string" || !locationId) return { error: "Brak lokalizacji" }
 
-    if (file.size > MAX_FILE_SIZE) {
-      return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
-    }
-    if (!isAllowedFile(file.name, file.type)) {
-      return { error: `Nieobsługiwany typ pliku: ${file.name}` }
-    }
+    if (file.size > MAX_FILE_SIZE) return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
+    if (!isAllowedFile(file.name, file.type)) return { error: `Nieobsługiwany typ pliku: ${file.name}` }
 
+    const teamId = await getTeamId(supabase, user.id)
     const uuid = randomUUID()
     const sanitized = sanitizeFilename(file.name)
-    const storagePath = `${user.id}/${locationId}/${uuid}-${sanitized}`
+    const storagePath = `${teamId}/${locationId}/${uuid}-${sanitized}`
+    const mimeType = file.type || "application/octet-stream"
 
-    const { error: uploadError } = await supabase.storage
-      .from("files")
-      .upload(storagePath, file, {
-        contentType: file.type || "application/octet-stream",
-      })
-
-    if (uploadError) return { error: uploadError.message }
+    const buffer = Buffer.from(await file.arrayBuffer())
+    await uploadToR2(storagePath, buffer, mimeType)
 
     const { data, error: dbError } = await supabase
       .from("files")
@@ -250,15 +251,16 @@ export async function uploadFile(formData: FormData) {
         location_id: locationId,
         name: file.name,
         storage_path: storagePath,
-        mime_type: file.type || "application/octet-stream",
+        mime_type: mimeType,
         size_bytes: file.size,
         uploaded_by: user.id,
+        storage_provider: "r2",
       })
       .select()
       .single()
 
     if (dbError) {
-      await supabase.storage.from("files").remove([storagePath])
+      await deleteFromR2(storagePath).catch(() => {})
       return { error: dbError.message }
     }
 
@@ -275,9 +277,7 @@ export async function uploadFile(formData: FormData) {
 export async function uploadIssuePhoto(formData: FormData) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: "Nie zalogowany" }
 
     const file = formData.get("file")
@@ -291,15 +291,14 @@ export async function uploadIssuePhoto(formData: FormData) {
     if (file.size > MAX_FILE_SIZE) return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
     if (!file.type.startsWith("image/")) return { error: "Tylko zdjęcia są dozwolone" }
 
+    const teamId = await getTeamId(supabase, user.id)
     const uuid = randomUUID()
     const sanitized = sanitizeFilename(file.name)
-    const storagePath = `${user.id}/${locationId}/${uuid}-${sanitized}`
+    const storagePath = `${teamId}/${locationId}/${uuid}-${sanitized}`
+    const mimeType = file.type
 
-    const { error: uploadError } = await supabase.storage
-      .from("files")
-      .upload(storagePath, file, { contentType: file.type })
-
-    if (uploadError) return { error: uploadError.message }
+    const buffer = Buffer.from(await file.arrayBuffer())
+    await uploadToR2(storagePath, buffer, mimeType)
 
     const { data, error: dbError } = await supabase
       .from("files")
@@ -308,15 +307,16 @@ export async function uploadIssuePhoto(formData: FormData) {
         issue_id: issueId,
         name: file.name,
         storage_path: storagePath,
-        mime_type: file.type,
+        mime_type: mimeType,
         size_bytes: file.size,
         uploaded_by: user.id,
+        storage_provider: "r2",
       })
       .select("id")
       .single()
 
     if (dbError) {
-      await supabase.storage.from("files").remove([storagePath])
+      await deleteFromR2(storagePath).catch(() => {})
       return { error: dbError.message }
     }
 
@@ -330,9 +330,7 @@ export async function uploadIssuePhoto(formData: FormData) {
 export async function uploadFileForTask(formData: FormData) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: "Nie zalogowany" }
 
     const file = formData.get("file")
@@ -341,24 +339,17 @@ export async function uploadFileForTask(formData: FormData) {
     if (!(file instanceof File)) return { error: "Brak pliku" }
     if (typeof taskId !== "string" || !taskId) return { error: "Brak ID zadania" }
 
-    if (file.size > MAX_FILE_SIZE) {
-      return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
-    }
-    if (!isAllowedFile(file.name, file.type)) {
-      return { error: `Nieobsługiwany typ pliku: ${file.name}` }
-    }
+    if (file.size > MAX_FILE_SIZE) return { error: `Plik "${file.name}" jest za duży (max 50 MB)` }
+    if (!isAllowedFile(file.name, file.type)) return { error: `Nieobsługiwany typ pliku: ${file.name}` }
 
+    const teamId = await getTeamId(supabase, user.id)
     const uuid = randomUUID()
     const sanitized = sanitizeFilename(file.name)
-    const storagePath = `${user.id}/tasks/${taskId}/${uuid}-${sanitized}`
+    const storagePath = `${teamId}/tasks/${taskId}/${uuid}-${sanitized}`
+    const mimeType = file.type || "application/octet-stream"
 
-    const { error: uploadError } = await supabase.storage
-      .from("files")
-      .upload(storagePath, file, {
-        contentType: file.type || "application/octet-stream",
-      })
-
-    if (uploadError) return { error: uploadError.message }
+    const buffer = Buffer.from(await file.arrayBuffer())
+    await uploadToR2(storagePath, buffer, mimeType)
 
     const { data, error: dbError } = await supabase
       .from("files")
@@ -366,15 +357,16 @@ export async function uploadFileForTask(formData: FormData) {
         task_id: taskId,
         name: file.name,
         storage_path: storagePath,
-        mime_type: file.type || "application/octet-stream",
+        mime_type: mimeType,
         size_bytes: file.size,
         uploaded_by: user.id,
+        storage_provider: "r2",
       })
       .select("id")
       .single()
 
     if (dbError) {
-      await supabase.storage.from("files").remove([storagePath])
+      await deleteFromR2(storagePath).catch(() => {})
       return { error: dbError.message }
     }
 
@@ -385,24 +377,28 @@ export async function uploadFileForTask(formData: FormData) {
   }
 }
 
+// ─── Delete (provider-aware) ──────────────────────────────────────────────────
+
 export async function deleteFile(id: string) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: "Nie zalogowany" }
 
     const { data: file } = await supabase
       .from("files")
-      .select("id, storage_path, location_id, floor_id, task_id")
+      .select("id, storage_path, storage_provider, location_id, floor_id, task_id")
       .eq("id", id)
       .single()
 
     if (!file) return { error: "Plik nie znaleziony" }
 
-    // Best-effort storage deletion — proceed to DB cleanup even if it fails
-    await supabase.storage.from("files").remove([file.storage_path])
+    // Best-effort storage deletion — proceed to DB cleanup even on failure
+    if (file.storage_provider === "r2") {
+      await deleteFromR2(file.storage_path).catch(() => {})
+    } else {
+      await supabase.storage.from("files").remove([file.storage_path])
+    }
 
     const { error: dbError } = await supabase.from("files").delete().eq("id", id)
     if (dbError) return { error: dbError.message }

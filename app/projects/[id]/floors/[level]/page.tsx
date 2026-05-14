@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { resolveFileUrls } from "@/lib/storage"
 import { LocationTree } from "@/components/tree/LocationTree"
 import { TaskList } from "@/components/tasks/TaskList"
 import { NotesPanel } from "@/components/notes/NotesPanel"
@@ -65,22 +66,22 @@ export default async function FloorPage({
   // Floor-level files (drawings)
   const { data: filesData } = await supabase
     .from("files")
-    .select("id, name, mime_type, size_bytes, created_at, storage_path")
+    .select("id, name, mime_type, size_bytes, created_at, storage_path, storage_provider")
     .eq("floor_id", floor.id)
     .order("created_at", { ascending: false })
 
   let floorFileItems: FileItem[] = []
   if (filesData && filesData.length > 0) {
-    const paths = filesData.map((f) => f.storage_path)
-    const { data: signedUrls } = await supabase.storage
-      .from("files")
-      .createSignedUrls(paths, 3600)
-    const urlMap = new Map<string, string>()
-    signedUrls?.forEach(({ path, signedUrl }) => {
-      if (path && signedUrl) urlMap.set(path, signedUrl)
-    })
+    const urlMap = await resolveFileUrls(
+      filesData.map((f) => ({
+        storage_path: f.storage_path,
+        storage_provider: (f.storage_provider ?? "supabase") as "supabase" | "r2",
+      })),
+      supabase
+    )
     floorFileItems = filesData.map((f) => ({
       ...f,
+      storage_provider: f.storage_provider ?? "supabase",
       signedUrl: urlMap.get(f.storage_path) ?? null,
     }))
   }
