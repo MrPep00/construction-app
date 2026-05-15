@@ -6,27 +6,37 @@ import {
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 
-function getR2Env() {
-  const accountId = process.env.R2_ACCOUNT_ID
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY
-  const bucket = process.env.R2_BUCKET_NAME
-  return { accountId, accessKeyId, secretAccessKey, bucket }
+/**
+ * Resolve R2 endpoint URL from env vars.
+ * Accepts either:
+ *   R2_ENDPOINT = https://abc123.r2.cloudflarestorage.com   (full URL — preferred)
+ *   R2_ACCOUNT_ID = abc123                                   (legacy, constructs URL)
+ */
+function getR2Endpoint(): string | undefined {
+  if (process.env.R2_ENDPOINT) return process.env.R2_ENDPOINT
+  if (process.env.R2_ACCOUNT_ID) return `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+  return undefined
 }
 
 export function isR2Configured(): boolean {
-  const { accountId, accessKeyId, secretAccessKey, bucket } = getR2Env()
-  return Boolean(accountId && accessKeyId && secretAccessKey && bucket)
+  return Boolean(
+    getR2Endpoint() &&
+    process.env.R2_ACCESS_KEY_ID &&
+    process.env.R2_SECRET_ACCESS_KEY &&
+    process.env.R2_BUCKET_NAME
+  )
 }
 
 function getClient(): S3Client {
-  const { accountId, accessKeyId, secretAccessKey } = getR2Env()
-  if (!accountId || !accessKeyId || !secretAccessKey) {
-    throw new Error("R2 env vars missing: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY")
+  const endpoint = getR2Endpoint()
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY
+  if (!endpoint || !accessKeyId || !secretAccessKey) {
+    throw new Error("R2 env vars missing: R2_ENDPOINT (or R2_ACCOUNT_ID), R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY")
   }
   return new S3Client({
     region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    endpoint,
     credentials: { accessKeyId, secretAccessKey },
   })
 }

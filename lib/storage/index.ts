@@ -41,8 +41,8 @@ export async function resolveFileUrls(
     })
   }
 
-  // R2: parallel presigned GET URLs
-  if (r2Files.length > 0) {
+  // R2: parallel presigned GET URLs (only when R2 is configured)
+  if (r2Files.length > 0 && isR2Configured()) {
     const r2PublicUrl = process.env.R2_PUBLIC_URL
     await Promise.all(
       r2Files.map(async (f) => {

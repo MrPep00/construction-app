@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { randomUUID } from "crypto"
 import { createClient } from "@/lib/supabase/server"
 import { logError } from "@/lib/logging/log-error"
-import { getR2PresignedPutUrl, uploadToR2, deleteFromR2 } from "@/lib/storage/r2"
+import { getR2PresignedPutUrl, uploadToR2, deleteFromR2, isR2Configured } from "@/lib/storage/r2"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
 
@@ -88,6 +88,8 @@ export async function createUploadPath(
   sizeBytes: number,
 ) {
   try {
+    if (!isR2Configured()) return { error: "Magazyn plików nie jest skonfigurowany — skontaktuj się z administratorem" }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: "Nie zalogowany" }
@@ -116,6 +118,8 @@ export async function createUploadPathForFloor(
   sizeBytes: number,
 ) {
   try {
+    if (!isR2Configured()) return { error: "Magazyn plików nie jest skonfigurowany — skontaktuj się z administratorem" }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: "Nie zalogowany" }
