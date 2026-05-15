@@ -2,8 +2,8 @@
  * Unified file URL resolver. Branches on storage_provider.
  * Used by Server Components that display files from the `files` table.
  *
- * Phase 1: created but not yet called by app code.
- * Phase 2: all file-serving pages switch to resolveFileUrls().
+ * Handles both legacy Supabase files (storage_provider='supabase') and
+ * current R2 files (storage_provider='r2') in a single batched call.
  */
 
 import { getR2SignedUrl, getR2PublicUrl, isR2Configured } from "./r2"
