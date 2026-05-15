@@ -1,0 +1,73 @@
+# scripts/
+
+One-off data operations for specific production instances. Not schema migrations.
+
+**Convention (see DECISIONS.md D-022):**
+- `supabase/migrations/` — schema changes (CREATE TABLE, ALTER, RLS, triggers). Portable. Auto-applied.
+- `scripts/` — data operations tied to a specific database instance. Hardcoded UUIDs. Run manually.
+
+Naming: `seed-<scope>.sql`, `cleanup-<scope>.sql`, `migrate-<scope>.ts`.
+
+---
+
+## Available scripts
+
+### `seed-apartments-budynek-A.sql`
+
+**Purpose:** Seeds 63 apartments (M1–M63) across floors 1–6 of the production "Budynek A" project.
+
+**When to run:** Once, on the production database. UUIDs are hardcoded for this specific project — do not run on any other instance.
+
+**How to run:**
+1. Open Supabase Dashboard → SQL Editor.
+2. Paste the full contents of `scripts/seed-apartments-budynek-A.sql`.
+3. Click **Run**.
+4. Verify the output table shows 6 rows with the expected counts.
+
+**What it does:**
+- Pre-flight check: verifies all 6 target floors and 6 parent "Mieszkania" folders exist (raises exception if not).
+- Inserts apartments per floor with idempotency guard (NOT EXISTS on floor_id + parent_id + name).
+- Floor 1: M1–M10 (10 apartments)
+- Floor 2: M11–M21 (11 apartments)
+- Floor 3: M22–M32 (11 apartments)
+- Floor 4: M33–M43 (11 apartments)
+- Floor 5: M44–M53 (10 apartments)
+- Floor 6: M54–M63 (10 apartments)
+- Verifies counts inside the transaction; rolls back on mismatch.
+- Returns a result set showing floor, count, first, and last apartment name.
+
+**Expected output:**
+
+| floor | apartments_inserted | first | last |
+|-------|--------------------:|-------|------|
+| 1     | 10                  | M1    | M10  |
+| 2     | 11                  | M11   | M21  |
+| 3     | 11                  | M22   | M32  |
+| 4     | 11                  | M33   | M43  |
+| 5     | 10                  | M44   | M53  |
+| 6     | 10                  | M54   | M63  |
+
+**Rollback (if needed):**
+```sql
+DELETE FROM locations
+WHERE type = 'apartment'
+  AND floor_id IN (
+    'd9d9ac70-d034-4a47-8942-9d6d7f9d73c6',
+    'c68b2d08-75af-40fb-9e3a-6bedfa03f641',
+    '503bcf66-f065-4e64-8e03-549a0a7fa9f0',
+    'b8718e7c-a5de-407c-ad2c-2ada3cc0e0c6',
+    'f5125cd3-d724-48b3-9736-6855aeee87e0',
+    'ecf158d9-d8f8-4024-a38d-f0325ee21f67'
+  )
+  AND name ~ '^M[0-9]+$';
+```
+
+---
+
+### `check-r2-orphans.ts`
+
+Checks for files in the `files` table that no longer have a corresponding object in Cloudflare R2. Run with `npx tsx scripts/check-r2-orphans.ts`. Added during Module 9 (R2 migration).
+
+### `setup-r2-cors.ts`
+
+Configures CORS rules on the Cloudflare R2 bucket. Run once after creating the bucket or after changing allowed origins. Added during Module 9 (R2 migration).
