@@ -38,6 +38,10 @@ function getClient(): S3Client {
     region: "auto",
     endpoint,
     credentials: { accessKeyId, secretAccessKey },
+    // Disable automatic checksum headers — presigned PUT URLs go to browser
+    // which doesn't know how to send x-amz-checksum-* headers
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   })
 }
 
