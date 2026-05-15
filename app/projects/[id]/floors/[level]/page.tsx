@@ -2,12 +2,11 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { resolveFileUrls } from "@/lib/storage"
-import { LocationTree } from "@/components/tree/LocationTree"
+import { LocationTabs } from "@/components/tree/LocationTabs"
 import { TaskList } from "@/components/tasks/TaskList"
 import { NotesPanel } from "@/components/notes/NotesPanel"
 import { FloorTabs } from "@/components/FloorTabs"
-import { FileUploader } from "@/components/upload/FileUploader"
-import { FileGrid } from "@/components/upload/FileGrid"
+import { FloorFilePanel } from "@/components/upload/FloorFilePanel"
 import { FloorInventorySummary } from "@/components/inventory/FloorInventorySummary"
 import { FloorInventoryPanel } from "@/components/inventory/FloorInventoryPanel"
 import type { FileItem } from "@/components/upload/FileGridClient"
@@ -87,7 +86,7 @@ export default async function FloorPage({
   }
 
   return (
-    <main className="container mx-auto max-w-3xl px-4 py-6">
+    <main className="container mx-auto max-w-5xl px-4 py-6">
       <nav className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground">
         <Link href="/projects" className="hover:text-foreground">
           Projekty
@@ -102,38 +101,33 @@ export default async function FloorPage({
 
       <h1 className="mb-6 text-2xl font-bold">{floor.label}</h1>
 
-      {/* Floor-level files — always visible */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Pliki piętra</h2>
-        <FileUploader floorId={floor.id} />
-        {floorFileItems.length > 0 && (
-          <div className="mt-4">
-            <FileGrid files={floorFileItems} />
-          </div>
-        )}
-      </section>
+      <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
+        {/* LEFT — folders + tasks/notes/inventory */}
+        <div className="space-y-8">
+          <section>
+            <LocationTabs
+              locations={locations ?? []}
+              projectId={id}
+              floorLevel={level}
+              floorId={floor.id}
+              openIssueCounts={openIssueCounts}
+            />
+          </section>
 
-      {/* Subfolders (Zmiany lokatorskie + custom) — always visible */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Foldery</h2>
-        <LocationTree
-          locations={locations ?? []}
-          projectId={id}
-          floorLevel={level}
-          floorId={floor.id}
-          openIssueCounts={openIssueCounts}
-        />
-      </section>
+          <FloorInventorySummary projectId={id} floorId={floor.id} />
 
-      {/* Material shortfalls for this floor */}
-      <FloorInventorySummary projectId={id} floorId={floor.id} />
+          <FloorTabs
+            tasks={<TaskList projectId={id} floorId={floor.id} />}
+            notes={<NotesPanel projectId={id} floorId={floor.id} />}
+            inventory={<FloorInventoryPanel projectId={id} floorId={floor.id} />}
+          />
+        </div>
 
-      {/* Tasks, Notes, Inventory tabs */}
-      <FloorTabs
-        tasks={<TaskList projectId={id} floorId={floor.id} />}
-        notes={<NotesPanel projectId={id} floorId={floor.id} />}
-        inventory={<FloorInventoryPanel projectId={id} floorId={floor.id} />}
-      />
+        {/* RIGHT — sticky files panel */}
+        <aside className="order-first mb-8 lg:order-last lg:mb-0">
+          <FloorFilePanel floorId={floor.id} files={floorFileItems} />
+        </aside>
+      </div>
     </main>
   )
 }

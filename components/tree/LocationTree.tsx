@@ -25,7 +25,7 @@ export type LocationTreeNode = LocationRow & {
   children: LocationTreeNode[]
 }
 
-function buildTree(
+export function buildTree(
   rows: LocationRow[],
   parentId: string | null = null
 ): LocationTreeNode[] {

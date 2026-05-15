@@ -10,6 +10,7 @@ import {
   Trash2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 import { Lightbox } from "./Lightbox"
 import { deleteFile } from "@/lib/actions/files"
 
@@ -37,9 +38,10 @@ function NonImageIcon({ mimeType, name }: { mimeType: string; name: string }) {
 
 interface Props {
   files: FileItem[]
+  className?: string
 }
 
-export function FileGridClient({ files }: Props) {
+export function FileGridClient({ files, className }: Props) {
   const router = useRouter()
   const [lightbox, setLightbox] = useState<FileItem | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -72,7 +74,7 @@ export function FileGridClient({ files }: Props) {
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+      <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6", className)}>
         {files.map((file) => {
           const isImage = file.mime_type.startsWith("image/")
           const isDeleting = deletingId === file.id

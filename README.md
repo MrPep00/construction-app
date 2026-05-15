@@ -26,7 +26,7 @@ Aplikacja PWA do zarządzania inspekcjami budów — usterki, zdjęcia, zadania,
 | Styling | Tailwind CSS + shadcn/ui |
 | Backend | Next.js Server Actions |
 | Baza danych | Supabase Postgres + RLS |
-| Storage | Supabase Storage |
+| Storage | Cloudflare R2 |
 | Auth | Supabase Auth (magic link) |
 | PWA | Service Worker (static, NetworkFirst/CacheFirst) |
 | Walidacja | Zod |
@@ -59,6 +59,13 @@ Utwórz plik `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxx...
 
+# Cloudflare R2 (Storage)
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET_NAME=
+NEXT_PUBLIC_R2_PUBLIC_URL=https://pub-xxx.r2.dev
+
 # Opcjonalnie — Sentry
 NEXT_PUBLIC_SENTRY_DSN=
 SENTRY_ORG=
@@ -79,9 +86,9 @@ supabase/migrations/006_drop_severity.sql
 supabase/migrations/007_task_files.sql
 ```
 
-### 4. Supabase Storage
+### 4. Cloudflare R2
 
-W panelu Supabase utwórz bucket `files` jako **Private**.
+Utwórz bucket R2 w panelu Cloudflare i uzupełnij zmienne `R2_*` w `.env.local`. Supabase Storage nie jest już używany do przechowywania plików.
 
 ### 5. Supabase Auth
 
