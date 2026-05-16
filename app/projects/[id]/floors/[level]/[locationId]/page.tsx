@@ -5,7 +5,7 @@ import { resolveFileUrls } from "@/lib/storage"
 import { TYPE_ICONS } from "@/components/tree/LocationNode"
 import { AddChildButton } from "@/components/tree/AddChildButton"
 import { FileUploader } from "@/components/upload/FileUploader"
-import { FileGrid } from "@/components/upload/FileGrid"
+import { FileGridClient } from "@/components/upload/FileGridClient"
 import { IssueList } from "@/components/issues/IssueList"
 import { NewIssueButton } from "@/components/issues/NewIssueButton"
 
@@ -105,7 +105,7 @@ export default async function LocationPage({
   const canAddApartment = location.type === "tenant_changes"
 
   return (
-    <main className="container mx-auto max-w-3xl px-4 py-6">
+    <main className="container mx-auto max-w-5xl px-4 py-6">
       <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
         <Link href="/projects" className="hover:text-foreground">
           Projekty
@@ -141,73 +141,84 @@ export default async function LocationPage({
         <span>{location.name}</span>
       </h1>
 
-      {/* Subfolders */}
-      <section className="mb-6">
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-          Podfoldery
-        </h2>
+      <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
+        {/* LEFT — subfolders + issues */}
+        <div className="space-y-6">
+          {/* Subfolders */}
+          <section>
+            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+              Podfoldery
+            </h2>
 
-        {children && children.length > 0 && (
-          <ul className="mb-2 space-y-1">
-            {children.map((child) => (
-              <li key={child.id}>
-                <Link
-                  href={`/projects/${id}/floors/${level}/${child.id}`}
-                  className="flex min-h-[44px] items-center gap-3 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50"
-                >
-                  <span className="shrink-0 text-base leading-none">
-                    {TYPE_ICONS[child.type] ?? "📁"}
-                  </span>
-                  <span className="font-medium">{child.name}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+            {children && children.length > 0 && (
+              <ul className="mb-2 space-y-1">
+                {children.map((child) => (
+                  <li key={child.id}>
+                    <Link
+                      href={`/projects/${id}/floors/${level}/${child.id}`}
+                      className="flex min-h-[44px] items-center gap-3 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50"
+                    >
+                      <span className="shrink-0 text-base leading-none">
+                        {TYPE_ICONS[child.type] ?? "📁"}
+                      </span>
+                      <span className="font-medium">{child.name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
 
-        <div className="flex flex-wrap gap-2">
-          {canAddSubfolder && (
-            <AddChildButton
-              mode={{
-                type: "create-subfolder",
-                parentId: locationId,
-                floorId: floor.id,
-              }}
-              label="Dodaj podfolder"
-            />
-          )}
-          {canAddApartment && (
-            <AddChildButton
-              mode={{
-                type: "create-apartment",
-                parentId: locationId,
-                floorId: floor.id,
-              }}
-              label="Dodaj mieszkanie"
-            />
-          )}
+            <div className="flex flex-wrap gap-2">
+              {canAddSubfolder && (
+                <AddChildButton
+                  mode={{
+                    type: "create-subfolder",
+                    parentId: locationId,
+                    floorId: floor.id,
+                  }}
+                  label="Dodaj podfolder"
+                />
+              )}
+              {canAddApartment && (
+                <AddChildButton
+                  mode={{
+                    type: "create-apartment",
+                    parentId: locationId,
+                    floorId: floor.id,
+                  }}
+                  label="Dodaj mieszkanie"
+                />
+              )}
+            </div>
+          </section>
+
+          {/* Issues */}
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-medium text-muted-foreground">Usterki</h2>
+              <NewIssueButton locationId={locationId} />
+            </div>
+            <IssueList issues={issuesData ?? []} locationId={locationId} />
+          </section>
         </div>
-      </section>
 
-      {/* Files */}
-      <section className="mb-6">
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Pliki</h2>
-        <FileUploader locationId={locationId} />
-        {fileItems.length > 0 && (
-          <div className="mt-4">
-            <FileGrid files={fileItems} />
+        {/* RIGHT — sticky files panel */}
+        <aside className="order-first mb-8 lg:order-last lg:mb-0">
+          <div className="rounded-xl border bg-card lg:sticky lg:top-[calc(3.5rem+1px)] lg:max-h-[calc(100vh-3.5rem-2rem)] lg:overflow-y-auto">
+            <div className="flex items-center border-b px-4 py-3">
+              <h2 className="text-sm font-semibold text-foreground">Pliki</h2>
+            </div>
+            <div className="space-y-4 p-4">
+              <FileUploader locationId={locationId} />
+              {fileItems.length > 0 ? (
+                <FileGridClient files={fileItems} className="grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2" />
+              ) : (
+                <p className="text-xs text-muted-foreground">Brak plików</p>
+              )}
+            </div>
           </div>
-        )}
-      </section>
-
-      {/* Issues */}
-      <section>
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-medium text-muted-foreground">Usterki</h2>
-          <NewIssueButton locationId={locationId} />
-        </div>
-        <IssueList issues={issuesData ?? []} locationId={locationId} />
-      </section>
+        </aside>
+      </div>
     </main>
   )
 }

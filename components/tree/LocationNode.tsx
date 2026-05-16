@@ -39,6 +39,7 @@ interface Props {
   projectId: string
   floorLevel: number
   openIssueCount?: number
+  tenantChangesId?: string | null
   children?: React.ReactNode
 }
 
@@ -52,6 +53,7 @@ export function LocationNode({
   projectId,
   floorLevel,
   openIssueCount = 0,
+  tenantChangesId,
   children,
 }: Props) {
   const isLocked = node.parent_id === null && node.type === "tenant_changes"
@@ -166,6 +168,23 @@ export function LocationNode({
             )}
             {CAN_ADD_APARTMENT.has(node.type) && !isLocked && (
               <DropdownMenuSeparator />
+            )}
+            {node.type === "apartment" && tenantChangesId && node.parent_id !== tenantChangesId && (
+              <>
+                <DropdownMenuItem
+                  onClick={() =>
+                    onDialog({
+                      type: "move-to-tenant-changes",
+                      locationId: node.id,
+                      name: node.name,
+                      tenantChangesId,
+                    })
+                  }
+                >
+                  Przenieś do zmian lokatorskich
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
             )}
             {!isLocked && (
               <DropdownMenuItem

@@ -37,6 +37,7 @@ export function LocationTabs({
   openIssueCounts,
 }: Props) {
   const roots = buildTree(locations)
+  const tenantChangesId = locations.find((l) => l.type === "tenant_changes")?.id ?? null
 
   const [activeTabId, setActiveTabId] = useState<string | null>(
     () => roots[0]?.id ?? null
@@ -77,6 +78,7 @@ export function LocationTabs({
         projectId={projectId}
         floorLevel={floorLevel}
         openIssueCount={openIssueCounts?.[node.id] ?? 0}
+        tenantChangesId={tenantChangesId}
       >
         {node.children.map((child) => renderNode(child, depth + 1))}
       </LocationNode>

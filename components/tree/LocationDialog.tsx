@@ -14,6 +14,7 @@ import {
   createLocation,
   renameLocation,
   deleteLocation,
+  moveLocationToTenantChanges,
 } from "@/lib/actions/locations"
 
 export type DialogMode =
@@ -21,6 +22,7 @@ export type DialogMode =
   | { type: "create-apartment"; parentId: string | null; floorId: string }
   | { type: "rename"; locationId: string; currentName: string }
   | { type: "delete"; locationId: string; name: string }
+  | { type: "move-to-tenant-changes"; locationId: string; name: string; tenantChangesId: string }
 
 interface Props {
   mode: DialogMode
@@ -32,6 +34,7 @@ const TITLES: Record<DialogMode["type"], string> = {
   "create-apartment": "Nowe mieszkanie",
   rename: "Zmień nazwę",
   delete: "Usuń lokalizację",
+  "move-to-tenant-changes": "Przenieś do zmian lokatorskich",
 }
 
 const PLACEHOLDERS: Partial<Record<DialogMode["type"], string>> = {
@@ -48,6 +51,7 @@ export function LocationDialog({ mode, onClose }: Props) {
   const [isPending, startTransition] = useTransition()
 
   const isDelete = mode.type === "delete"
+  const isMove = mode.type === "move-to-tenant-changes"
 
   function handleSubmit() {
     setError(null)
@@ -70,6 +74,8 @@ export function LocationDialog({ mode, onClose }: Props) {
         })
       } else if (mode.type === "rename") {
         result = await renameLocation(mode.locationId, name)
+      } else if (mode.type === "move-to-tenant-changes") {
+        result = await moveLocationToTenantChanges(mode.locationId, mode.tenantChangesId)
       } else {
         result = await deleteLocation(mode.locationId)
       }
@@ -92,6 +98,10 @@ export function LocationDialog({ mode, onClose }: Props) {
         {isDelete ? (
           <p className="text-sm text-muted-foreground">
             Usunąć <strong>{(mode as Extract<DialogMode, { type: "delete" }>).name}</strong> i wszystkie elementy w środku? Tej operacji nie można cofnąć.
+          </p>
+        ) : isMove ? (
+          <p className="text-sm text-muted-foreground">
+            Przenieść <strong>{(mode as Extract<DialogMode, { type: "move-to-tenant-changes" }>).name}</strong> bezpośrednio do folderu Zmiany lokatorskie?
           </p>
         ) : (
           <div className="space-y-1">
@@ -122,15 +132,19 @@ export function LocationDialog({ mode, onClose }: Props) {
           <Button
             variant={isDelete ? "destructive" : "default"}
             onClick={handleSubmit}
-            disabled={isPending || (!isDelete && !name.trim())}
+            disabled={isPending || (!isDelete && !isMove && !name.trim())}
           >
             {isPending
               ? isDelete
                 ? "Usuwanie..."
-                : "Zapisywanie..."
+                : isMove
+                  ? "Przenoszenie..."
+                  : "Zapisywanie..."
               : isDelete
                 ? "Usuń"
-                : "Zapisz"}
+                : isMove
+                  ? "Przenieś"
+                  : "Zapisz"}
           </Button>
         </DialogFooter>
       </DialogContent>

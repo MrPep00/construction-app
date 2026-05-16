@@ -134,6 +134,57 @@ export async function renameLocation(
   }
 }
 
+export async function moveLocationToTenantChanges(
+  locationId: string,
+  tenantChangesId: string
+): Promise<{ data?: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
+
+    if (
+      !z.string().uuid().safeParse(locationId).success ||
+      !z.string().uuid().safeParse(tenantChangesId).success
+    ) {
+      return { error: "Nieprawidłowe ID" }
+    }
+
+    const { data: loc } = await supabase
+      .from("locations")
+      .select("floor_id")
+      .eq("id", locationId)
+      .single()
+
+    const { data: tc } = await supabase
+      .from("locations")
+      .select("floor_id")
+      .eq("id", tenantChangesId)
+      .eq("type", "tenant_changes")
+      .single()
+
+    if (!loc || !tc) return { error: "Lokalizacja nie istnieje" }
+    if (loc.floor_id !== tc.floor_id) return { error: "Różne piętra — nie można przenieść" }
+
+    const { error } = await supabase
+      .from("locations")
+      .update({ parent_id: tenantChangesId })
+      .eq("id", locationId)
+
+    if (error) return { error: error.message }
+
+    await revalidateFloorByLocationId(supabase, locationId)
+    return { data: true }
+  } catch (error) {
+    await logError({
+      error,
+      actionName: "moveLocationToTenantChanges",
+      context: { locationId, tenantChangesId },
+    })
+    return { error: "Nie udało się przenieść lokalizacji" }
+  }
+}
+
 export async function deleteLocation(
   id: string
 ): Promise<{ data?: boolean; error?: string }> {

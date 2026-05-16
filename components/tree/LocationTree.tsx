@@ -68,6 +68,7 @@ export function LocationTree({ locations, projectId, floorLevel, floorId, openIs
   }
 
   const roots = buildTree(locations)
+  const tenantChangesId = locations.find((l) => l.type === "tenant_changes")?.id ?? null
 
   function renderNode(node: LocationTreeNode, depth: number): React.ReactNode {
     const expanded = expandedIds.has(node.id)
@@ -83,6 +84,7 @@ export function LocationTree({ locations, projectId, floorLevel, floorId, openIs
         projectId={projectId}
         floorLevel={floorLevel}
         openIssueCount={openIssueCounts?.[node.id] ?? 0}
+        tenantChangesId={tenantChangesId}
       >
         {node.children.map((child) => renderNode(child, depth + 1))}
       </LocationNode>
