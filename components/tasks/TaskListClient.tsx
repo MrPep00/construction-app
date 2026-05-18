@@ -57,9 +57,10 @@ interface Props {
   tasks: TaskRow[]
   projectId: string
   floorId?: string | null
+  hideCreate?: boolean
 }
 
-export function TaskListClient({ tasks: initialTasks, projectId, floorId }: Props) {
+export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCreate }: Props) {
   const [optimisticTasks, applyOptimistic] = useOptimistic(
     initialTasks,
     (state: TaskRow[], { id, status }: { id: string; status: TaskStatus }) =>
@@ -114,12 +115,14 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId }: Prop
   return (
     <>
       <div className="space-y-4">
-        <div className="flex justify-end">
-          <Button size="sm" onClick={() => setDialog({ type: "create" })}>
-            <PlusIcon className="size-3.5" />
-            Nowe zadanie
-          </Button>
-        </div>
+        {!hideCreate && (
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => setDialog({ type: "create" })}>
+              <PlusIcon className="size-3.5" />
+              Nowe zadanie
+            </Button>
+          </div>
+        )}
 
         {optimisticTasks.length === 0 && (
           <p className="text-sm text-muted-foreground">Brak zadań.</p>

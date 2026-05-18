@@ -3,11 +3,9 @@ import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { resolveFileUrls } from "@/lib/storage"
 import { TYPE_ICONS } from "@/components/tree/LocationNode"
-import { AddChildButton } from "@/components/tree/AddChildButton"
 import { FileUploader } from "@/components/upload/FileUploader"
 import { FileGridClient } from "@/components/upload/FileGridClient"
-import { IssueList } from "@/components/issues/IssueList"
-import { NewIssueButton } from "@/components/issues/NewIssueButton"
+import { LocationSidePanel } from "@/components/location/LocationSidePanel"
 
 export default async function LocationPage({
   params,
@@ -47,7 +45,7 @@ export default async function LocationPage({
 
   if (!location) return notFound()
 
-  const [{ data: issuesData }, { data: filesData }, { data: children }] =
+  const [{ data: issuesData }, { data: filesData }, { data: tasksData }] =
     await Promise.all([
       supabase
         .from("issues")
@@ -60,10 +58,11 @@ export default async function LocationPage({
         .eq("location_id", locationId)
         .order("created_at", { ascending: false }),
       supabase
-        .from("locations")
-        .select("id, name, type, sort_order")
-        .eq("parent_id", locationId)
-        .order("sort_order"),
+        .from("tasks")
+        .select("id, title, description, status, priority, due_date, created_at")
+        .eq("project_id", id)
+        .eq("floor_id", floor.id)
+        .order("created_at", { ascending: false }),
     ])
 
   let fileItems: import("@/components/upload/FileGridClient").FileItem[] = []
@@ -99,10 +98,6 @@ export default async function LocationPage({
   }
 
   const icon = TYPE_ICONS[location.type] ?? "📁"
-  const canAddSubfolder = ["tenant_changes", "folder", "apartment", "room"].includes(
-    location.type
-  )
-  const canAddApartment = location.type === "tenant_changes"
 
   return (
     <main className="container mx-auto max-w-5xl px-4 py-6">
@@ -142,81 +137,28 @@ export default async function LocationPage({
       </h1>
 
       <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
-        {/* LEFT — subfolders + issues */}
-        <div className="space-y-6">
-          {/* Subfolders */}
-          <section>
-            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-              Podfoldery
-            </h2>
-
-            {children && children.length > 0 && (
-              <ul className="mb-2 space-y-1">
-                {children.map((child) => (
-                  <li key={child.id}>
-                    <Link
-                      href={`/projects/${id}/floors/${level}/${child.id}`}
-                      className="flex min-h-[44px] items-center gap-3 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50"
-                    >
-                      <span className="shrink-0 text-base leading-none">
-                        {TYPE_ICONS[child.type] ?? "📁"}
-                      </span>
-                      <span className="font-medium">{child.name}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <div className="flex flex-wrap gap-2">
-              {canAddSubfolder && (
-                <AddChildButton
-                  mode={{
-                    type: "create-subfolder",
-                    parentId: locationId,
-                    floorId: floor.id,
-                  }}
-                  label="Dodaj podfolder"
-                />
-              )}
-              {canAddApartment && (
-                <AddChildButton
-                  mode={{
-                    type: "create-apartment",
-                    parentId: locationId,
-                    floorId: floor.id,
-                  }}
-                  label="Dodaj mieszkanie"
-                />
-              )}
+        {/* LEFT — files */}
+        <section className="order-first mb-8 lg:mb-0">
+          <h2 className="mb-3 text-sm font-medium text-muted-foreground">Pliki</h2>
+          <FileUploader locationId={locationId} />
+          {fileItems.length > 0 ? (
+            <div className="mt-4">
+              <FileGridClient files={fileItems} className="grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-3" />
             </div>
-          </section>
+          ) : (
+            <p className="mt-4 text-xs text-muted-foreground">Brak plików</p>
+          )}
+        </section>
 
-          {/* Issues */}
-          <section>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-medium text-muted-foreground">Usterki</h2>
-              <NewIssueButton locationId={locationId} />
-            </div>
-            <IssueList issues={issuesData ?? []} locationId={locationId} />
-          </section>
-        </div>
-
-        {/* RIGHT — sticky files panel */}
-        <aside className="order-first mb-8 lg:order-last lg:mb-0">
-          <div className="rounded-xl border bg-card lg:sticky lg:top-[calc(3.5rem+1px)] lg:max-h-[calc(100vh-3.5rem-2rem)] lg:overflow-y-auto">
-            <div className="flex items-center border-b px-4 py-3">
-              <h2 className="text-sm font-semibold text-foreground">Pliki</h2>
-            </div>
-            <div className="space-y-4 p-4">
-              <FileUploader locationId={locationId} />
-              {fileItems.length > 0 ? (
-                <FileGridClient files={fileItems} className="grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2" />
-              ) : (
-                <p className="text-xs text-muted-foreground">Brak plików</p>
-              )}
-            </div>
-          </div>
+        {/* RIGHT — sticky issues + tasks panel */}
+        <aside className="lg:order-last">
+          <LocationSidePanel
+            issues={issuesData ?? []}
+            tasks={(tasksData ?? []).map((t) => ({ ...t, files: [] }))}
+            locationId={locationId}
+            projectId={id}
+            floorId={floor.id}
+          />
         </aside>
       </div>
     </main>
