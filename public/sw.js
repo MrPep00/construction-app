@@ -57,9 +57,16 @@ async function cacheFirst(request, cacheName) {
   const cached = await cache.match(request)
   if (cached) return cached
 
-  const response = await fetch(request)
-  if (response.ok) cache.put(request, response.clone())
-  return response
+  try {
+    const response = await fetch(request)
+    if (response.ok) cache.put(request, response.clone())
+    return response
+  } catch {
+    return new Response("Zasób niedostępny offline.", {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    })
+  }
 }
 
 async function networkFirst(request, cacheName) {
