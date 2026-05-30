@@ -71,3 +71,22 @@ Checks for files in the `files` table that no longer have a corresponding object
 ### `setup-r2-cors.ts`
 
 Configures CORS rules on the Cloudflare R2 bucket. Run once after creating the bucket or after changing allowed origins. Added during Module 9 (R2 migration).
+
+---
+
+### `rollback-018-task-location-scope.sql`
+
+**Purpose:** Rolls back migration 018 (`018_task_location_scope.sql`) which added `location_id` to `tasks` and the `tasks_single_scope_check` constraint. The per-apartment task scoping was deferred (see DECISIONS.md D-023).
+
+**When to run:** Already applied to production after migration 018 was rolled back. Do not re-run unless migration 018 is reapplied first.
+
+**What it does:**
+- Drops constraint `tasks_single_scope_check` (if exists).
+- Drops column `tasks.location_id` (if exists).
+
+**How to run:**
+1. Open Supabase Dashboard → SQL Editor.
+2. Paste the full contents of `scripts/rollback-018-task-location-scope.sql`.
+3. Click **Run**.
+
+**Rollback of rollback:** Re-apply `supabase/migrations/018_task_location_scope.sql` (if the file exists) or recreate manually: `ALTER TABLE tasks ADD COLUMN location_id uuid REFERENCES locations(id) ON DELETE CASCADE; ALTER TABLE tasks ADD CONSTRAINT tasks_single_scope_check CHECK (NOT (floor_id IS NOT NULL AND location_id IS NOT NULL));`
