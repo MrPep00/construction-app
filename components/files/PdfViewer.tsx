@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { Document, Page, pdfjs } from "react-pdf"
 import "react-pdf/dist/Page/AnnotationLayer.css"
 import "react-pdf/dist/Page/TextLayer.css"
@@ -95,24 +96,30 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     : { scale }
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-background">
-      {/* Header — X is absolute so it never gets pushed off-screen */}
-      <div className="relative flex flex-none items-center border-b bg-background py-2 pl-4 pr-14">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-background">
+      {/* Header — filename only; X button is portalled to body so nothing can clip it */}
+      <div className="flex shrink-0 items-center border-b bg-background px-4 py-2 pr-16">
         <h2 className="truncate text-sm font-medium">
           {filename}
         </h2>
+      </div>
+
+      {/* Close button — rendered directly into document.body, immune to all stacking contexts */}
+      {typeof document !== "undefined" && createPortal(
         <button
           type="button"
           onClick={onClose}
           aria-label="Zamknij podgląd"
-          className="absolute right-2 top-1/2 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-md hover:bg-muted"
+          style={{ position: "fixed", top: 0, right: 0, zIndex: 9999 }}
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-bl-md bg-background hover:bg-muted border-b border-l"
         >
           <XIcon className="size-5" />
-        </button>
-      </div>
+        </button>,
+        document.body
+      )}
 
       {/* Toolbar */}
-      <div className="flex flex-none flex-wrap items-center gap-1 border-b bg-muted/40 px-3 py-1.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-1 border-b bg-muted/40 px-3 py-1.5">
         {/* Page nav */}
         <button
           type="button"
