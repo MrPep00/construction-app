@@ -28,6 +28,8 @@ export type TaskRow = {
   due_date: string | null
   created_at: string
   files: FileItem[]
+  location_name?: string | null
+  floor_label?: string | null
 }
 
 type DialogState =
@@ -161,6 +163,13 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
                           >
                             {task.title}
                           </span>
+                          {(task.location_name || task.floor_label) && (
+                            <div className="mt-0.5">
+                              <span className="inline-block rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                {task.location_name ?? task.floor_label}
+                              </span>
+                            </div>
+                          )}
                           {task.due_date && (
                             <div className="mt-0.5">
                               <span

@@ -1,7 +1,9 @@
 import Link from "next/link"
+import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { buttonVariants } from "@/components/ui/button"
+import { ProjectTasksSidePanel } from "@/components/tasks/ProjectTasksSidePanel"
 
 export default async function ProjectDashboardPage({
   params,
@@ -119,39 +121,53 @@ export default async function ProjectDashboardPage({
         </div>
       </div>
 
-      <div className="flex flex-col gap-0.5">
-        {floorList.map((floor) => {
-          const issues = openIssuesByFloor[floor.id] ?? 0
-          const tasks = activeTasksByFloor[floor.id] ?? 0
-          const apartments = tenantChangesByFloor[floor.id] ?? 0
+      <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
+        <div className="flex flex-col gap-0.5">
+          {floorList.map((floor) => {
+            const issues = openIssuesByFloor[floor.id] ?? 0
+            const tasks = activeTasksByFloor[floor.id] ?? 0
+            const apartments = tenantChangesByFloor[floor.id] ?? 0
 
-          return (
-            <Link
-              key={floor.id}
-              href={`/projects/${id}/floors/${floor.level}`}
-              className="flex min-h-[44px] items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/50 md:min-h-0 md:py-1.5"
-            >
-              <span>{floor.label}</span>
-              <div className="flex items-center gap-2 text-xs">
-                {issues > 0 && (
-                  <span className="rounded-full bg-red-100 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                    {issues} usterek
-                  </span>
-                )}
-                {tasks > 0 && (
-                  <span className="rounded-full bg-blue-100 px-1.5 py-0.5 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                    {tasks} zadań
-                  </span>
-                )}
-                {apartments > 0 && (
-                  <span className="text-muted-foreground">
-                    🏠 {apartments}
-                  </span>
-                )}
+            return (
+              <Link
+                key={floor.id}
+                href={`/projects/${id}/floors/${floor.level}`}
+                className="flex min-h-[44px] items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/50 md:min-h-0 md:py-1.5"
+              >
+                <span>{floor.label}</span>
+                <div className="flex items-center gap-2 text-xs">
+                  {issues > 0 && (
+                    <span className="rounded-full bg-red-100 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                      {issues} usterek
+                    </span>
+                  )}
+                  {tasks > 0 && (
+                    <span className="rounded-full bg-blue-100 px-1.5 py-0.5 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                      {tasks} zadań
+                    </span>
+                  )}
+                  {apartments > 0 && (
+                    <span className="text-muted-foreground">
+                      🏠 {apartments}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+
+        <aside className="mt-6 lg:mt-0">
+          <Suspense
+            fallback={
+              <div className="rounded-xl border bg-card p-4">
+                <p className="text-sm text-muted-foreground">Ładowanie zadań...</p>
               </div>
-            </Link>
-          )
-        })}
+            }
+          >
+            <ProjectTasksSidePanel projectId={id} />
+          </Suspense>
+        </aside>
       </div>
     </main>
   )

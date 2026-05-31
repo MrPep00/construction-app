@@ -98,7 +98,7 @@ export function LocationSidePanel({ issues, tasks, locationId, projectId, floorI
         <TaskForm
           mode="create"
           projectId={projectId}
-          floorId={floorId}
+          locationId={locationId}
           onClose={() => setCreateDialog(null)}
         />
       )}

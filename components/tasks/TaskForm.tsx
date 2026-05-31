@@ -15,7 +15,7 @@ import { PaperclipIcon, XIcon } from "lucide-react"
 import { createTask, updateTask } from "@/lib/actions/tasks"
 import { uploadFileForTask } from "@/lib/actions/files"
 
-type CreateMode = { mode: "create"; projectId: string; floorId?: string | null }
+type CreateMode = { mode: "create"; projectId: string; floorId?: string | null; locationId?: string | null }
 type EditMode = {
   mode: "edit"
   task: {
@@ -58,6 +58,7 @@ export function TaskForm(props: Props) {
         const result = await createTask({
           projectId: props.projectId,
           floorId: props.floorId,
+          locationId: props.locationId,
           title,
           description: description || undefined,
           priority: 3,

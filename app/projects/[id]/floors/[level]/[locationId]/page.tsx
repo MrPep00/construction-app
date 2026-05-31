@@ -60,8 +60,7 @@ export default async function LocationPage({
       supabase
         .from("tasks")
         .select("id, title, description, status, priority, due_date, created_at")
-        .eq("project_id", id)
-        .eq("floor_id", floor.id)
+        .eq("location_id", locationId)
         .order("created_at", { ascending: false }),
     ])
 

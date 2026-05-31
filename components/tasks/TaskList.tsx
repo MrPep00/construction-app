@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server"
 import { resolveFileUrls } from "@/lib/storage"
+import { getFloorTasks } from "@/lib/actions/tasks"
 import { TaskListClient, type TaskRow } from "./TaskListClient"
 import type { FileItem } from "@/components/upload/FileGridClient"
+import type { TaskStatus } from "@/lib/types/db"
 
 interface Props {
   projectId: string
@@ -11,19 +13,31 @@ interface Props {
 export async function TaskList({ projectId, floorId }: Props) {
   const supabase = await createClient()
 
-  let query = supabase
-    .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at")
-    .eq("project_id", projectId)
-
-  if (floorId) {
-    query = query.eq("floor_id", floorId)
-  } else {
-    query = query.is("floor_id", null)
+  type RawTask = {
+    id: string
+    title: string
+    description: string | null
+    status: string
+    priority: number
+    due_date: string | null
+    created_at: string
+    location_name?: string | null
+    floor_label?: string | null
   }
 
-  const { data } = await query
-  const rawTasks = data ?? []
+  let rawTasks: RawTask[]
+
+  if (floorId) {
+    rawTasks = await getFloorTasks(floorId)
+  } else {
+    const { data } = await supabase
+      .from("tasks")
+      .select("id, title, description, status, priority, due_date, created_at")
+      .eq("project_id", projectId)
+      .is("floor_id", null)
+      .is("location_id", null)
+    rawTasks = data ?? []
+  }
 
   const filesMap = new Map<string, FileItem[]>()
 
@@ -64,8 +78,16 @@ export async function TaskList({ projectId, floorId }: Props) {
   }
 
   const tasks: TaskRow[] = rawTasks.map((t) => ({
-    ...t,
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    status: t.status as TaskStatus,
+    priority: t.priority,
+    due_date: t.due_date,
+    created_at: t.created_at,
     files: filesMap.get(t.id) ?? [],
+    location_name: t.location_name ?? null,
+    floor_label: t.floor_label ?? null,
   }))
 
   return <TaskListClient tasks={tasks} projectId={projectId} floorId={floorId} />
