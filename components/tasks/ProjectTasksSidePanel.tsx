@@ -1,12 +1,35 @@
+import { createClient } from "@/lib/supabase/server"
 import { getProjectTasks } from "@/lib/actions/tasks"
 import { TaskListClient, type TaskRow } from "./TaskListClient"
+import type { FloorOption, ApartmentOption } from "./TaskForm"
 
 interface Props {
   projectId: string
 }
 
 export async function ProjectTasksSidePanel({ projectId }: Props) {
+  const supabase = await createClient()
   const tasks = await getProjectTasks(projectId)
+
+  const { data: floorsData } = await supabase
+    .from("floors")
+    .select("id, level, label")
+    .eq("project_id", projectId)
+    .order("level", { ascending: true })
+
+  const floors: FloorOption[] = floorsData ?? []
+  const floorIds = floors.map((f) => f.id)
+
+  let apartments: ApartmentOption[] = []
+  if (floorIds.length > 0) {
+    const { data: aptsData } = await supabase
+      .from("locations")
+      .select("id, name, floor_id")
+      .in("floor_id", floorIds)
+      .eq("type", "apartment")
+      .order("name")
+    apartments = aptsData ?? []
+  }
 
   const taskRows: TaskRow[] = tasks.map((t) => ({
     id: t.id,
@@ -27,7 +50,12 @@ export async function ProjectTasksSidePanel({ projectId }: Props) {
         <h2 className="text-sm font-semibold">Zadania projektu</h2>
       </div>
       <div className="p-4">
-        <TaskListClient tasks={taskRows} projectId={projectId} />
+        <TaskListClient
+          tasks={taskRows}
+          projectId={projectId}
+          floors={floors}
+          apartments={apartments}
+        />
       </div>
     </div>
   )

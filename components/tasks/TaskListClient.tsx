@@ -6,7 +6,7 @@ import Image from "next/image"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { updateTaskStatus, deleteTask } from "@/lib/actions/tasks"
-import { TaskForm } from "./TaskForm"
+import { TaskForm, type FloorOption, type ApartmentOption } from "./TaskForm"
 import { Lightbox } from "@/components/upload/Lightbox"
 import type { FileItem } from "@/components/upload/FileGridClient"
 import {
@@ -60,9 +60,11 @@ interface Props {
   projectId: string
   floorId?: string | null
   hideCreate?: boolean
+  floors?: FloorOption[]
+  apartments?: ApartmentOption[]
 }
 
-export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCreate }: Props) {
+export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCreate, floors, apartments }: Props) {
   const [optimisticTasks, applyOptimistic] = useOptimistic(
     initialTasks,
     (state: TaskRow[], { id, status }: { id: string; status: TaskStatus }) =>
@@ -282,6 +284,8 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
           mode="create"
           projectId={projectId}
           floorId={floorId}
+          floors={floors}
+          apartments={apartments}
           onClose={() => setDialog(null)}
         />
       )}
