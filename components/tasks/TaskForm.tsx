@@ -15,7 +15,17 @@ import { PaperclipIcon, XIcon } from "lucide-react"
 import { createTask, updateTask } from "@/lib/actions/tasks"
 import { uploadFileForTask } from "@/lib/actions/files"
 
-type CreateMode = { mode: "create"; projectId: string; floorId?: string | null; locationId?: string | null }
+export type FloorOption = { id: string; level: number; label: string }
+export type ApartmentOption = { id: string; name: string; floor_id: string }
+
+type CreateMode = {
+  mode: "create"
+  projectId: string
+  floorId?: string | null
+  locationId?: string | null
+  floors?: FloorOption[]
+  apartments?: ApartmentOption[]
+}
 type EditMode = {
   mode: "edit"
   task: {
@@ -36,6 +46,46 @@ export function TaskForm(props: Props) {
   const [isPending, startTransition] = useTransition()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [selectedFloorId, setSelectedFloorId] = useState("")
+  const [selectedLocationId, setSelectedLocationId] = useState("")
+
+  const showScopePicker =
+    props.mode === "create" && props.floors != null && props.floors.length > 0
+
+  // Floor view: floorId known, show only apartment picker (no floor picker)
+  const showApartmentPicker =
+    props.mode === "create" &&
+    !showScopePicker &&
+    !!props.floorId &&
+    !!props.apartments &&
+    props.apartments.length > 0
+
+  const filteredApartments =
+    showScopePicker && props.mode === "create" && props.apartments && selectedFloorId
+      ? props.apartments.filter((a) => a.floor_id === selectedFloorId)
+      : showApartmentPicker && props.mode === "create" && props.apartments
+      ? props.apartments
+      : []
+
+  function handleFloorChange(value: string) {
+    setSelectedFloorId(value)
+    setSelectedLocationId("")
+  }
+
+  function getScopeLabel(): string {
+    if (!showScopePicker) return ""
+    if (selectedLocationId) {
+      const apt = (props as CreateMode).apartments?.find((a) => a.id === selectedLocationId)
+      const floor = (props as CreateMode).floors?.find((f) => f.id === selectedFloorId)
+      return `Zadanie mieszkania ${apt?.name ?? ""} na piętrze ${floor?.label ?? ""}`
+    }
+    if (selectedFloorId) {
+      const floor = (props as CreateMode).floors?.find((f) => f.id === selectedFloorId)
+      return `Zadanie piętra ${floor?.label ?? ""}`
+    }
+    return "Zadanie globalne projektu (bez przypisania)"
+  }
+
   function handleFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? [])
     setPendingFiles((prev) => {
@@ -55,10 +105,19 @@ export function TaskForm(props: Props) {
       let taskId: string | undefined
 
       if (props.mode === "create") {
+        const effectiveFloorId = showScopePicker
+          ? (selectedLocationId ? undefined : selectedFloorId || undefined)
+          : showApartmentPicker
+          ? (selectedLocationId ? undefined : props.floorId ?? undefined)
+          : props.floorId ?? undefined
+        const effectiveLocationId = (showScopePicker || showApartmentPicker)
+          ? (selectedLocationId || undefined)
+          : props.locationId ?? undefined
+
         const result = await createTask({
           projectId: props.projectId,
-          floorId: props.floorId,
-          locationId: props.locationId,
+          floorId: effectiveFloorId,
+          locationId: effectiveLocationId,
           title,
           description: description || undefined,
           priority: 3,
@@ -92,6 +151,8 @@ export function TaskForm(props: Props) {
     })
   }
 
+  const scopeLabel = getScopeLabel()
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !isPending) props.onClose() }}>
       <DialogContent>
@@ -124,6 +185,77 @@ export function TaskForm(props: Props) {
               rows={3}
             />
           </div>
+
+          {showScopePicker && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">
+                Zakres <span className="font-normal">(opcjonalnie)</span>
+              </label>
+
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Piętro</label>
+                <select
+                  value={selectedFloorId}
+                  onChange={(e) => handleFloorChange(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">— Brak (zadanie globalne) —</option>
+                  {(props as CreateMode).floors!.map((floor) => (
+                    <option key={floor.id} value={floor.id}>
+                      {floor.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Mieszkanie</label>
+                <select
+                  value={selectedLocationId}
+                  onChange={(e) => setSelectedLocationId(e.target.value)}
+                  disabled={!selectedFloorId}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {!selectedFloorId ? (
+                    <option value="">Najpierw wybierz piętro</option>
+                  ) : (
+                    <>
+                      <option value="">— Brak (zadanie piętra) —</option>
+                      {filteredApartments.map((apt) => (
+                        <option key={apt.id} value={apt.id}>
+                          {apt.name}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
+              </div>
+
+              {scopeLabel && (
+                <p className="text-xs text-muted-foreground">{scopeLabel}</p>
+              )}
+            </div>
+          )}
+
+          {showApartmentPicker && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-muted-foreground">
+                Mieszkanie <span className="font-normal">(opcjonalnie)</span>
+              </label>
+              <select
+                value={selectedLocationId}
+                onChange={(e) => setSelectedLocationId(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">— Brak (zadanie piętra) —</option>
+                {filteredApartments.map((apt) => (
+                  <option key={apt.id} value={apt.id}>
+                    {apt.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <input
