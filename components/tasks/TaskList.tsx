@@ -4,6 +4,7 @@ import { getFloorTasks } from "@/lib/actions/tasks"
 import { TaskListClient, type TaskRow } from "./TaskListClient"
 import type { FileItem } from "@/components/upload/FileGridClient"
 import type { TaskStatus } from "@/lib/types/db"
+import type { ApartmentOption } from "./TaskForm"
 
 interface Props {
   projectId: string
@@ -26,9 +27,17 @@ export async function TaskList({ projectId, floorId }: Props) {
   }
 
   let rawTasks: RawTask[]
+  let apartments: ApartmentOption[] = []
 
   if (floorId) {
     rawTasks = await getFloorTasks(floorId)
+    const { data: aptsData } = await supabase
+      .from("locations")
+      .select("id, name, floor_id")
+      .eq("floor_id", floorId)
+      .eq("type", "apartment")
+      .order("name")
+    apartments = aptsData ?? []
   } else {
     const { data } = await supabase
       .from("tasks")
@@ -90,5 +99,5 @@ export async function TaskList({ projectId, floorId }: Props) {
     floor_label: t.floor_label ?? null,
   }))
 
-  return <TaskListClient tasks={tasks} projectId={projectId} floorId={floorId} />
+  return <TaskListClient tasks={tasks} projectId={projectId} floorId={floorId} apartments={apartments} />
 }
