@@ -95,24 +95,24 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     : { scale }
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-background">
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b bg-background px-4 py-2">
-        <h2 className="max-w-[calc(100%-3rem)] truncate text-sm font-medium">
+    <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-background">
+      {/* Header — X is absolute so it never gets pushed off-screen */}
+      <div className="relative flex flex-none items-center border-b bg-background py-2 pl-4 pr-14">
+        <h2 className="truncate text-sm font-medium">
           {filename}
         </h2>
         <button
           type="button"
           onClick={onClose}
           aria-label="Zamknij podgląd"
-          className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md hover:bg-muted"
+          className="absolute right-2 top-1/2 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-md hover:bg-muted"
         >
           <XIcon className="size-5" />
         </button>
       </div>
 
       {/* Toolbar */}
-      <div className="flex shrink-0 flex-wrap items-center gap-1 border-b bg-muted/40 px-3 py-1.5">
+      <div className="flex flex-none flex-wrap items-center gap-1 border-b bg-muted/40 px-3 py-1.5">
         {/* Page nav */}
         <button
           type="button"
@@ -193,9 +193,10 @@ export function PdfViewer({ src, filename, onClose }: Props) {
       </div>
 
       {/* Document body — only this scrolls; header + toolbar stay fixed */}
+      {/* min-h-0 required in Safari: flex items default min-height:auto which breaks overflow scroll */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto p-4"
+        className="min-h-0 flex-1 overflow-auto p-4"
       >
         {/* Inner wrapper: centers narrow PDFs, expands for wide ones so horizontal scroll works */}
         <div className="flex min-w-fit justify-center">
