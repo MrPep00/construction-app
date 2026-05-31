@@ -95,7 +95,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     : { scale }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b bg-background px-4 py-2">
         <h2 className="max-w-[calc(100%-3rem)] truncate text-sm font-medium">
