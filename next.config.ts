@@ -23,6 +23,7 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "52mb",
     },
+    serverComponentsExternalPackages: ["react-pdf"],
   },
 }
 

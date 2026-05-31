@@ -1,6 +1,7 @@
 "use client"
 
 import { useOptimistic, useState, useTransition } from "react"
+import dynamic from "next/dynamic"
 import { PencilIcon, Trash2Icon, PlusIcon, PaperclipIcon, ChevronDownIcon, FileTextIcon, FileIcon } from "lucide-react"
 import Image from "next/image"
 import { toast } from "sonner"
@@ -9,6 +10,12 @@ import { updateTaskStatus, deleteTask } from "@/lib/actions/tasks"
 import { TaskForm, type FloorOption, type ApartmentOption } from "./TaskForm"
 import { Lightbox } from "@/components/upload/Lightbox"
 import type { FileItem } from "@/components/upload/FileGridClient"
+import { isPdf } from "@/lib/files/is-pdf"
+
+const PdfViewer = dynamic(
+  () => import("@/components/files/PdfViewer").then((m) => m.PdfViewer),
+  { ssr: false }
+)
 import {
   Dialog,
   DialogContent,
@@ -73,6 +80,7 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
   const [dialog, setDialog] = useState<DialogState>(null)
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set())
   const [lightboxFile, setLightboxFile] = useState<FileItem | null>(null)
+  const [pdfFile, setPdfFile] = useState<FileItem | null>(null)
   const [, startTransition] = useTransition()
 
   function handleToggleDone(task: TaskRow) {
@@ -248,8 +256,20 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
                                   </button>
                                 )
                               }
-                              const ext = file.name.split(".").pop()?.toLowerCase() ?? ""
-                              const isPdf = file.mime_type === "application/pdf" || ext === "pdf"
+                              if (isPdf(file) && file.signedUrl) {
+                                return (
+                                  <button
+                                    key={file.id}
+                                    type="button"
+                                    onClick={() => setPdfFile(file)}
+                                    className="flex items-center gap-1.5 rounded-md border bg-muted px-2 py-1.5 text-xs hover:bg-muted/80"
+                                    aria-label={`Podgląd PDF: ${file.name}`}
+                                  >
+                                    <FileTextIcon className="size-3.5 shrink-0 text-red-500" />
+                                    <span className="max-w-[120px] truncate">{file.name}</span>
+                                  </button>
+                                )
+                              }
                               return (
                                 <a
                                   key={file.id}
@@ -258,11 +278,7 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
                                   className="flex items-center gap-1.5 rounded-md border bg-muted px-2 py-1.5 text-xs hover:bg-muted/80"
                                   aria-label={`Pobierz: ${file.name}`}
                                 >
-                                  {isPdf ? (
-                                    <FileTextIcon className="size-3.5 shrink-0 text-red-500" />
-                                  ) : (
-                                    <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                                  )}
+                                  <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
                                   <span className="max-w-[120px] truncate">{file.name}</span>
                                 </a>
                               )
@@ -328,6 +344,14 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
           filename={lightboxFile.name}
           uploadedAt={lightboxFile.created_at}
           onClose={() => setLightboxFile(null)}
+        />
+      )}
+
+      {pdfFile && pdfFile.signedUrl && (
+        <PdfViewer
+          src={pdfFile.signedUrl}
+          filename={pdfFile.name}
+          onClose={() => setPdfFile(null)}
         />
       )}
     </>

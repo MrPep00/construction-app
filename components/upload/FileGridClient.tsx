@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import dynamic from "next/dynamic"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import {
@@ -13,6 +14,12 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Lightbox } from "./Lightbox"
 import { deleteFile } from "@/lib/actions/files"
+import { isPdf } from "@/lib/files/is-pdf"
+
+const PdfViewer = dynamic(
+  () => import("@/components/files/PdfViewer").then((m) => m.PdfViewer),
+  { ssr: false }
+)
 
 export type FileItem = {
   id: string
@@ -44,12 +51,14 @@ interface Props {
 export function FileGridClient({ files, className }: Props) {
   const router = useRouter()
   const [lightbox, setLightbox] = useState<FileItem | null>(null)
+  const [pdfFile, setPdfFile] = useState<FileItem | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
   function handleDelete(file: FileItem) {
     if (!confirm(`Usunąć plik "${file.name}"? Tej operacji nie można cofnąć.`)) return
     if (lightbox?.id === file.id) setLightbox(null)
+    if (pdfFile?.id === file.id) setPdfFile(null)
     setDeletingId(file.id)
 
     startTransition(async () => {
@@ -96,6 +105,15 @@ export function FileGridClient({ files, className }: Props) {
                       className="object-cover"
                       sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
                     />
+                  </button>
+                ) : isPdf(file) ? (
+                  <button
+                    type="button"
+                    className="flex size-full flex-col items-center justify-center gap-2 p-2 hover:bg-muted/80"
+                    onClick={() => setPdfFile(file)}
+                    aria-label={`Podgląd PDF: ${file.name}`}
+                  >
+                    <NonImageIcon mimeType={file.mime_type} name={file.name} />
                   </button>
                 ) : (
                   <a
@@ -144,6 +162,14 @@ export function FileGridClient({ files, className }: Props) {
           filename={lightbox.name}
           uploadedAt={lightbox.created_at}
           onClose={() => setLightbox(null)}
+        />
+      )}
+
+      {pdfFile && pdfFile.signedUrl && (
+        <PdfViewer
+          src={pdfFile.signedUrl}
+          filename={pdfFile.name}
+          onClose={() => setPdfFile(null)}
         />
       )}
     </>
