@@ -107,12 +107,6 @@ export default async function ProjectDashboardPage({
             Inwentaryzacja
           </Link>
           <Link
-            href={`/projects/${id}/tasks`}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            Zadania globalne
-          </Link>
-          <Link
             href={`/projects/${id}/notes`}
             className={buttonVariants({ variant: "outline", size: "sm" })}
           >
