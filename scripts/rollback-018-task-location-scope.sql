@@ -1,3 +1,7 @@
+-- OBSOLETE per D-027 — migration 019 reintroduces location_id on tasks.
+-- Kept as historical artifact only. Do NOT run this script.
+-- See: supabase/migrations/019_task_location_scope.sql for the new implementation.
+
 -- Rollback migration 018: remove location_id from tasks
 -- Run in Supabase SQL Editor (Dashboard → SQL Editor)
 -- Safe to run multiple times (IF EXISTS guards)
