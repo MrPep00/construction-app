@@ -105,9 +105,9 @@ export function PdfViewer({ src, filename, onClose }: Props) {
           type="button"
           onClick={onClose}
           aria-label="Zamknij podgląd"
-          className="flex size-8 items-center justify-center rounded-md hover:bg-muted"
+          className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md hover:bg-muted"
         >
-          <XIcon className="size-4" />
+          <XIcon className="size-5" />
         </button>
       </div>
 
@@ -192,46 +192,49 @@ export function PdfViewer({ src, filename, onClose }: Props) {
         </a>
       </div>
 
-      {/* Document body */}
+      {/* Document body — only this scrolls; header + toolbar stay fixed */}
       <div
         ref={containerRef}
-        className="flex flex-1 justify-center overflow-auto p-4"
+        className="flex-1 overflow-auto p-4"
       >
-        {loadError ? (
-          <div className="flex flex-col items-center gap-3 pt-16 text-center">
-            <p className="text-sm text-muted-foreground">
-              Nie udało się załadować pliku. Spróbuj go pobrać.
-            </p>
-            <a
-              href={src}
-              download={filename}
-              className="text-sm font-medium text-primary underline underline-offset-4"
-            >
-              Pobierz plik
-            </a>
-          </div>
-        ) : (
-          <Document
-            file={src}
-            onLoadSuccess={handleLoadSuccess}
-            onLoadError={() => setLoadError(true)}
-            loading={
-              <p className="pt-16 text-sm text-muted-foreground">
-                Ładowanie dokumentu…
+        {/* Inner wrapper: centers narrow PDFs, expands for wide ones so horizontal scroll works */}
+        <div className="flex min-w-fit justify-center">
+          {loadError ? (
+            <div className="flex flex-col items-center gap-3 pt-16 text-center">
+              <p className="text-sm text-muted-foreground">
+                Nie udało się załadować pliku. Spróbuj go pobrać.
               </p>
-            }
-          >
-            <Page
-              pageNumber={pageNumber}
-              {...pageProps}
+              <a
+                href={src}
+                download={filename}
+                className="text-sm font-medium text-primary underline underline-offset-4"
+              >
+                Pobierz plik
+              </a>
+            </div>
+          ) : (
+            <Document
+              file={src}
+              onLoadSuccess={handleLoadSuccess}
+              onLoadError={() => setLoadError(true)}
               loading={
-                <div className="flex h-[60vh] items-center justify-center">
-                  <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                </div>
+                <p className="pt-16 text-sm text-muted-foreground">
+                  Ładowanie dokumentu…
+                </p>
               }
-            />
-          </Document>
-        )}
+            >
+              <Page
+                pageNumber={pageNumber}
+                {...pageProps}
+                loading={
+                  <div className="flex h-[60vh] items-center justify-center">
+                    <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  </div>
+                }
+              />
+            </Document>
+          )}
+        </div>
       </div>
     </div>
   )
