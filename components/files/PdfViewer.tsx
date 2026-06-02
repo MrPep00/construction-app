@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { Document, Page, pdfjs } from "react-pdf"
 import "react-pdf/dist/Page/AnnotationLayer.css"
 import "react-pdf/dist/Page/TextLayer.css"
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function PdfViewer({ src, filename, onClose }: Props) {
+  const [mounted, setMounted] = useState(false)
   const [numPages, setNumPages] = useState<number | null>(null)
   const [pageNumber, setPageNumber] = useState(1)
   const [scale, setScale] = useState(1)
@@ -35,6 +37,14 @@ export function PdfViewer({ src, filename, onClose }: Props) {
   const pageNumberRef = useRef(pageNumber)
   const scaleRef = useRef(scale)
   const fitWidthRef = useRef(fitWidth)
+
+  useEffect(() => { setMounted(true) }, [])
+
+  useEffect(() => {
+    const original = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => { document.body.style.overflow = original }
+  }, [])
 
   useEffect(() => { pageNumberRef.current = pageNumber }, [pageNumber])
   useEffect(() => { scaleRef.current = scale }, [scale])
@@ -94,7 +104,9 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     ? { width: containerWidth }
     : { scale }
 
-  return (
+  if (!mounted) return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b bg-background px-4 py-2">
@@ -233,6 +245,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
           </Document>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
