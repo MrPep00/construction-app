@@ -41,7 +41,10 @@ async function getTeamId(
     .select("team_id")
     .eq("user_id", userId)
     .single()
-  return data?.team_id ?? userId
+  if (!data?.team_id) {
+    throw new Error(`User ${userId} has no team membership`)
+  }
+  return data.team_id
 }
 
 async function resolveLocationPath(
