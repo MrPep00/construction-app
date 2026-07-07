@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { LoginForm } from "@/app/(auth)/login/login-form"
 import { AcceptButton } from "./AcceptButton"
@@ -93,12 +94,12 @@ export default async function InvitePage({
               Twoje konto jest już członkiem zespołu{" "}
               <strong>{teamName}</strong>.
             </p>
-            <a
+            <Link
               href="/projects"
               className="inline-block text-sm text-primary underline underline-offset-4"
             >
               Przejdź do projektów →
-            </a>
+            </Link>
           </div>
         </main>
       )

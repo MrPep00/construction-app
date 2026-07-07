@@ -116,7 +116,7 @@ function FloorExpanded({
   if (floorItems.length === 0) {
     return (
       <p className="px-4 py-3 text-sm text-muted-foreground">
-        Brak przypisanych materiałów. Użyj "Nowy ruch", aby przypisać materiał do tego piętra.
+        Brak przypisanych materiałów. Użyj &quot;Nowy ruch&quot;, aby przypisać materiał do tego piętra.
       </p>
     )
   }

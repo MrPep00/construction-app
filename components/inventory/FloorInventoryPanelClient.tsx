@@ -134,7 +134,7 @@ export function FloorInventoryPanelClient({
       <div className="py-6 text-center">
         <p className="text-sm text-muted-foreground">Brak materiałów przypisanych do tego piętra.</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Przejdź do Inwentaryzacji projektu i użyj "Nowy ruch", aby przypisać materiał.
+          Przejdź do Inwentaryzacji projektu i użyj &quot;Nowy ruch&quot;, aby przypisać materiał.
         </p>
       </div>
     )

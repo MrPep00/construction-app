@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
 import { Document, Page, pdfjs } from "react-pdf"
 import "react-pdf/dist/Page/AnnotationLayer.css"
@@ -25,7 +25,6 @@ interface Props {
 }
 
 export function PdfViewer({ src, filename, onClose }: Props) {
-  const [mounted, setMounted] = useState(false)
   const [numPages, setNumPages] = useState<number | null>(null)
   const [pageNumber, setPageNumber] = useState(1)
   const [scale, setScale] = useState(1)
@@ -37,8 +36,6 @@ export function PdfViewer({ src, filename, onClose }: Props) {
   const pageNumberRef = useRef(pageNumber)
   const scaleRef = useRef(scale)
   const fitWidthRef = useRef(fitWidth)
-
-  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     const original = document.body.style.overflow
@@ -104,7 +101,13 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     ? { width: containerWidth }
     : { scale }
 
-  if (!mounted) return null
+  const isClient = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  )
+
+  if (!isClient) return null
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-background">

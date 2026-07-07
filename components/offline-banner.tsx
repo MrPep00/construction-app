@@ -1,27 +1,25 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useSyncExternalStore } from "react"
 import { WifiOff } from "lucide-react"
 
+function subscribe(callback: () => void) {
+  window.addEventListener("online", callback)
+  window.addEventListener("offline", callback)
+  return () => {
+    window.removeEventListener("online", callback)
+    window.removeEventListener("offline", callback)
+  }
+}
+
 export function OfflineBanner() {
-  const [isOffline, setIsOffline] = useState(false)
+  const isOnline = useSyncExternalStore(
+    subscribe,
+    () => navigator.onLine,
+    () => true
+  )
 
-  useEffect(() => {
-    setIsOffline(!navigator.onLine)
-
-    const handleOffline = () => setIsOffline(true)
-    const handleOnline = () => setIsOffline(false)
-
-    window.addEventListener("offline", handleOffline)
-    window.addEventListener("online", handleOnline)
-
-    return () => {
-      window.removeEventListener("offline", handleOffline)
-      window.removeEventListener("online", handleOnline)
-    }
-  }, [])
-
-  if (!isOffline) return null
+  if (isOnline) return null
 
   return (
     <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-sm font-medium text-white">

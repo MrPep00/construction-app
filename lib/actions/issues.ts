@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
-import { logError } from "@/lib/logging/log-error"
 import type { IssueStatus } from "@/lib/types/db"
+import { withAuth } from "./utils"
 
 const statusEnum = z.enum(["open", "in_progress", "resolved", "rejected"])
 
@@ -43,14 +43,8 @@ export async function createIssue(input: {
   title: string
   description?: string
   contractor?: string
-}): Promise<{ data?: { id: string }; error?: string }> {
-  try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return { error: "Nie zalogowany" }
-
+}) {
+  return withAuth("createIssue", async (supabase, user) => {
     const schema = z.object({
       locationId: z.string().uuid(),
       title: z.string().min(1, "Krótki opis jest wymagany").max(200, "Opis za długi"),
@@ -79,27 +73,14 @@ export async function createIssue(input: {
 
     await revalidateIssuePaths(supabase, parsed.data.locationId)
     return { data: { id: data.id } }
-  } catch (error) {
-    await logError({
-      error,
-      actionName: "createIssue",
-      context: { locationId: input.locationId },
-    })
-    return { error: "Nie udało się dodać usterki" }
-  }
+  }, { locationId: input.locationId })
 }
 
 export async function updateIssueStatus(
   id: string,
   status: IssueStatus
-): Promise<{ data?: boolean; error?: string }> {
-  try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return { error: "Nie zalogowany" }
-
+) {
+  return withAuth("updateIssueStatus", async (supabase) => {
     if (!z.string().uuid().safeParse(id).success) return { error: "Nieprawidłowe ID" }
     if (!statusEnum.safeParse(status).success) return { error: "Nieprawidłowy status" }
 
@@ -125,27 +106,14 @@ export async function updateIssueStatus(
 
     await revalidateIssuePaths(supabase, issue.location_id)
     return { data: true }
-  } catch (error) {
-    await logError({
-      error,
-      actionName: "updateIssueStatus",
-      context: { issueId: id, status },
-    })
-    return { error: "Nie udało się zaktualizować statusu" }
-  }
+  }, { issueId: id, status })
 }
 
 export async function updateIssue(
   id: string,
   fields: { title?: string; description?: string; contractor?: string }
-): Promise<{ data?: boolean; error?: string }> {
-  try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return { error: "Nie zalogowany" }
-
+) {
+  return withAuth("updateIssue", async (supabase) => {
     if (!z.string().uuid().safeParse(id).success) return { error: "Nieprawidłowe ID" }
 
     const schema = z.object({
@@ -174,26 +142,13 @@ export async function updateIssue(
 
     await revalidateIssuePaths(supabase, issue.location_id)
     return { data: true }
-  } catch (error) {
-    await logError({
-      error,
-      actionName: "updateIssue",
-      context: { issueId: id },
-    })
-    return { error: "Nie udało się zaktualizować usterki" }
-  }
+  }, { issueId: id })
 }
 
 export async function deleteIssue(
   id: string
-): Promise<{ data?: boolean; error?: string }> {
-  try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return { error: "Nie zalogowany" }
-
+) {
+  return withAuth("deleteIssue", async (supabase) => {
     if (!z.string().uuid().safeParse(id).success) return { error: "Nieprawidłowe ID" }
 
     const { data: issue } = await supabase
@@ -208,12 +163,5 @@ export async function deleteIssue(
 
     await revalidateIssuePaths(supabase, issue.location_id)
     return { data: true }
-  } catch (error) {
-    await logError({
-      error,
-      actionName: "deleteIssue",
-      context: { issueId: id },
-    })
-    return { error: "Nie udało się usunąć usterki" }
-  }
+  }, { issueId: id })
 }

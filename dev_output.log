@@ -1,0 +1,45 @@
+
+> construction-bootstrap@0.1.0 dev /app
+> next dev
+
+▲ Next.js 16.2.10 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.2:3000
+✓ Ready in 550ms
+- Experiments (use with caution):
+  · serverActions
+
+○ Compiling /login ...
+⨯ Error: Your project's URL and Key are required to create a Supabase client!
+
+Check your Supabase project's API settings to find these values
+
+https://supabase.com/dashboard/project/_/settings/api
+    at <unknown> (https://supabase.com/dashboard/project/_/settings/api)
+    at createClient (lib/supabase/server.ts:7:28)
+    at async Header (components/header.tsx:8:20)
+   5 |   const cookieStore = await cookies()
+   6 |
+>  7 |   return createServerClient(
+     |                            ^
+   8 |     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+   9 |     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  10 |     { {
+  digest: '4007292296'
+}
+ GET /login 500 in 5.5s (next.js: 4.8s, application-code: 724ms)
+[browser] Uncaught Error: Your project's URL and Key are required to create a Supabase client!
+
+Check your Supabase project's API settings to find these values
+
+https://supabase.com/dashboard/project/_/settings/api
+    at <unknown> (https://supabase.com/dashboard/project/_/settings/api)
+    at createClient (lib/supabase/server.ts:7:28)
+    at  Header (components/header.tsx:8:20)
+   5 |   const cookieStore = await cookies()
+   6 |
+>  7 |   return createServerClient(
+     |                            ^
+   8 |     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+   9 |     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  10 |     {

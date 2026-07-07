@@ -400,8 +400,6 @@ export async function deleteFile(id: string) {
     // Best-effort storage deletion — proceed to DB cleanup even on failure
     if (file.storage_provider === "r2") {
       await deleteFromR2(file.storage_path).catch(() => {})
-    } else {
-      await supabase.storage.from("files").remove([file.storage_path])
     }
 
     const { error: dbError } = await supabase.from("files").delete().eq("id", id)

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
-import { logError } from "@/lib/logging/log-error"
+import { withAuth } from "./utils"
 
 const nameField = z
   .string()
@@ -43,12 +43,8 @@ export async function createLocation(input: {
   parentId: string | null
   type: "apartment" | "room" | "folder"
   name: string
-}): Promise<{ data?: { id: string }; error?: string }> {
-  try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: "Nie zalogowany" }
-
+}) {
+  return withAuth("createLocation", async (supabase) => {
     const parsed = createLocationSchema.safeParse(input)
     if (!parsed.success) {
       return { error: parsed.error.issues[0]?.message ?? "Nieprawidłowe dane" }
@@ -91,25 +87,14 @@ export async function createLocation(input: {
 
     revalidatePath(`/projects/${floor.project_id}/floors/${floor.level}`)
     return { data: { id: data.id } }
-  } catch (error) {
-    await logError({
-      error,
-      actionName: "createLocation",
-      context: { floorId: input.floorId, type: input.type },
-    })
-    return { error: "Nie udało się utworzyć lokalizacji" }
-  }
+  }, { floorId: input.floorId, type: input.type })
 }
 
 export async function renameLocation(
   id: string,
   name: string
-): Promise<{ data?: boolean; error?: string }> {
-  try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: "Nie zalogowany" }
-
+) {
+  return withAuth("renameLocation", async (supabase) => {
     const parsed = renameLocationSchema.safeParse({ id, name })
     if (!parsed.success) {
       return { error: parsed.error.issues[0]?.message ?? "Nieprawidłowe dane" }
@@ -124,25 +109,14 @@ export async function renameLocation(
 
     await revalidateFloorByLocationId(supabase, parsed.data.id)
     return { data: true }
-  } catch (error) {
-    await logError({
-      error,
-      actionName: "renameLocation",
-      context: { locationId: id },
-    })
-    return { error: "Nie udało się zmienić nazwy" }
-  }
+  }, { locationId: id })
 }
 
 export async function moveLocationToTenantChanges(
   locationId: string,
   tenantChangesId: string
-): Promise<{ data?: boolean; error?: string }> {
-  try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: "Nie zalogowany" }
-
+) {
+  return withAuth("moveLocationToTenantChanges", async (supabase) => {
     if (
       !z.string().uuid().safeParse(locationId).success ||
       !z.string().uuid().safeParse(tenantChangesId).success
@@ -156,11 +130,11 @@ export async function moveLocationToTenantChanges(
       .eq("id", locationId)
       .single()
 
-    const { data: tc } = await supabase
+    const { data: tc = null } = await supabase
       .from("locations")
       .select("floor_id")
       .eq("id", tenantChangesId)
-      .eq("type", "tenant_changes")
+      .eq("type", "folder")
       .single()
 
     if (!loc || !tc) return { error: "Lokalizacja nie istnieje" }
@@ -175,24 +149,13 @@ export async function moveLocationToTenantChanges(
 
     await revalidateFloorByLocationId(supabase, locationId)
     return { data: true }
-  } catch (error) {
-    await logError({
-      error,
-      actionName: "moveLocationToTenantChanges",
-      context: { locationId, tenantChangesId },
-    })
-    return { error: "Nie udało się przenieść lokalizacji" }
-  }
+  }, { locationId, tenantChangesId })
 }
 
 export async function deleteLocation(
   id: string
-): Promise<{ data?: boolean; error?: string }> {
-  try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: "Nie zalogowany" }
-
+) {
+  return withAuth("deleteLocation", async (supabase) => {
     if (!z.string().uuid().safeParse(id).success) {
       return { error: "Nieprawidłowe ID" }
     }
@@ -207,12 +170,5 @@ export async function deleteLocation(
     if (error) return { error: error.message }
 
     return { data: true }
-  } catch (error) {
-    await logError({
-      error,
-      actionName: "deleteLocation",
-      context: { locationId: id },
-    })
-    return { error: "Nie udało się usunąć lokalizacji" }
-  }
+  }, { locationId: id })
 }
