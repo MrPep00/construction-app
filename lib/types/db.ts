@@ -8,7 +8,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type IssueStatus = "open" | "in_progress" | "resolved" | "rejected"
+export type IssueStatus = "open" | "resolved"
 export type LocationType = "branch" | "tenant_changes" | "apartment" | "room" | "folder"
 export type TaskStatus = "todo" | "doing" | "done"
 export type MovementReason = "delivery" | "consumption" | "correction"

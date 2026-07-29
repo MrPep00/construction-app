@@ -3,10 +3,10 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { ChevronDownIcon, PencilIcon, Trash2Icon, XIcon } from "lucide-react"
+import { ChevronDownIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { updateIssueStatus, deleteIssue } from "@/lib/actions/issues"
+import { resolveIssue, reopenIssue, deleteIssue } from "@/lib/actions/issues"
 import { StatusBadge } from "./StatusBadge"
 import { IssueForm } from "./IssueForm"
 import {
@@ -16,14 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { buttonVariants } from "@/components/ui/button"
 import type { IssueStatus } from "@/lib/types/db"
 
 export type IssueRow = {
@@ -45,30 +38,7 @@ type DialogState =
 
 const STATUS_ORDER: Record<IssueStatus, number> = {
   open: 0,
-  in_progress: 1,
-  resolved: 2,
-  rejected: 3,
-}
-
-const VALID_NEXT_STATUSES: Record<IssueStatus, IssueStatus[]> = {
-  open: ["in_progress", "rejected"],
-  in_progress: ["resolved", "rejected"],
-  resolved: ["rejected"],
-  rejected: [],
-}
-
-const NEXT_STATUS_LABELS: Record<IssueStatus, string> = {
-  open: "Otwarta",
-  in_progress: "W trakcie",
-  resolved: "Rozwiązana",
-  rejected: "Odrzucona",
-}
-
-const STATUS_SECTION_LABELS: Record<IssueStatus, string> = {
-  open: "Otwarte",
-  in_progress: "W trakcie",
-  resolved: "Rozwiązane",
-  rejected: "Odrzucone",
+  resolved: 1,
 }
 
 function formatDate(dateStr: string) {
@@ -177,7 +147,7 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
   const [optimisticIssues, setOptimisticIssues] = useState(initialIssues)
   const [dialog, setDialog] = useState<DialogState>(null)
   const [expandedSections, setExpandedSections] = useState<Set<IssueStatus>>(
-    () => new Set<IssueStatus>(["open", "in_progress"])
+    () => new Set<IssueStatus>(["open"])
   )
   const [, startTransition] = useTransition()
 
@@ -196,7 +166,10 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
   function handleStatusChange(issue: IssueRow, newStatus: IssueStatus) {
     setOptimisticIssues((prev) => prev.map((i) => i.id === issue.id ? { ...i, status: newStatus } : i))
     startTransition(async () => {
-      const result = await updateIssueStatus(issue.id, newStatus)
+      const result =
+        newStatus === "resolved"
+          ? await resolveIssue(issue.id)
+          : await reopenIssue(issue.id)
       if (result.error) {
         toast.error(result.error)
         setOptimisticIssues(initialIssues)
@@ -241,7 +214,6 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
       <div className="space-y-2">
         {Array.from(grouped.entries()).map(([status, group]) => {
           const expanded = expandedSections.has(status)
-          const nextStatuses = VALID_NEXT_STATUSES[status]
 
           return (
             <section key={status} className="overflow-hidden rounded-lg border">
@@ -279,21 +251,16 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
                         </button>
 
                         <div className="flex shrink-0 items-center gap-0.5">
-                          {nextStatuses.length > 0 && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-auto py-0.5 text-xs")}>
-                                Status
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {nextStatuses.map((s) => (
-                                  <DropdownMenuItem key={s} onClick={() => handleStatusChange(issue, s)}>
-                                    <StatusBadge status={s} />
-                                    <span>{NEXT_STATUS_LABELS[s]}</span>
-                                  </DropdownMenuItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-auto py-0.5 text-xs"
+                            onClick={() =>
+                              handleStatusChange(issue, issue.status === "open" ? "resolved" : "open")
+                            }
+                          >
+                            {issue.status === "open" ? "Rozwiąż" : "Otwórz ponownie"}
+                          </Button>
 
                           <Button variant="ghost" size="icon-sm" onClick={() => setDialog({ type: "edit", issue })} aria-label="Edytuj">
                             <PencilIcon className="size-3.5" />

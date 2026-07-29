@@ -4,16 +4,6 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { logError } from "@/lib/logging/log-error"
-import type { IssueStatus } from "@/lib/types/db"
-
-const statusEnum = z.enum(["open", "in_progress", "resolved", "rejected"])
-
-const VALID_NEXT_STATUSES: Record<IssueStatus, IssueStatus[]> = {
-  open: ["in_progress", "rejected"],
-  in_progress: ["resolved", "rejected"],
-  resolved: ["rejected"],
-  rejected: [],
-}
 
 async function revalidateIssuePaths(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -89,9 +79,8 @@ export async function createIssue(input: {
   }
 }
 
-export async function updateIssueStatus(
-  id: string,
-  status: IssueStatus
+export async function resolveIssue(
+  id: string
 ): Promise<{ data?: boolean; error?: string }> {
   try {
     const supabase = await createClient()
@@ -101,24 +90,21 @@ export async function updateIssueStatus(
     if (!user) return { error: "Nie zalogowany" }
 
     if (!z.string().uuid().safeParse(id).success) return { error: "Nieprawidłowe ID" }
-    if (!statusEnum.safeParse(status).success) return { error: "Nieprawidłowy status" }
 
     const { data: issue } = await supabase
       .from("issues")
-      .select("status, location_id")
+      .select("location_id")
       .eq("id", id)
       .single()
-
     if (!issue) return { error: "Usterka nie istnieje" }
-
-    const validNext = VALID_NEXT_STATUSES[issue.status as IssueStatus] ?? []
-    if (!validNext.includes(status)) {
-      return { error: `Niedozwolone przejście: ${issue.status} → ${status}` }
-    }
 
     const { error } = await supabase
       .from("issues")
-      .update({ status })
+      .update({
+        status: "resolved",
+        resolved_at: new Date().toISOString(),
+        resolved_by: user.id,
+      })
       .eq("id", id)
 
     if (error) return { error: error.message }
@@ -128,10 +114,48 @@ export async function updateIssueStatus(
   } catch (error) {
     await logError({
       error,
-      actionName: "updateIssueStatus",
-      context: { issueId: id, status },
+      actionName: "resolveIssue",
+      context: { issueId: id },
     })
-    return { error: "Nie udało się zaktualizować statusu" }
+    return { error: "Nie udało się rozwiązać usterki" }
+  }
+}
+
+export async function reopenIssue(
+  id: string
+): Promise<{ data?: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
+
+    if (!z.string().uuid().safeParse(id).success) return { error: "Nieprawidłowe ID" }
+
+    const { data: issue } = await supabase
+      .from("issues")
+      .select("location_id")
+      .eq("id", id)
+      .single()
+    if (!issue) return { error: "Usterka nie istnieje" }
+
+    const { error } = await supabase
+      .from("issues")
+      .update({ status: "open", resolved_at: null, resolved_by: null })
+      .eq("id", id)
+
+    if (error) return { error: error.message }
+
+    await revalidateIssuePaths(supabase, issue.location_id)
+    return { data: true }
+  } catch (error) {
+    await logError({
+      error,
+      actionName: "reopenIssue",
+      context: { issueId: id },
+    })
+    return { error: "Nie udało się otworzyć usterki ponownie" }
   }
 }
 
