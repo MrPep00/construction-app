@@ -88,7 +88,7 @@ export default async function ProjectDashboardPage({
   }
 
   return (
-    <main className="container mx-auto max-w-5xl px-4 py-6">
+    <main className="px-4 py-6 md:px-6 lg:px-10">
       <nav className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground">
         <Link href="/projects" className="hover:text-foreground">
           Projekty
@@ -131,12 +131,12 @@ export default async function ProjectDashboardPage({
                 <span>{floor.label}</span>
                 <div className="flex items-center gap-2 text-xs">
                   {issues > 0 && (
-                    <span className="rounded-full bg-red-100 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                    <span className="rounded-full bg-status-open-bg px-1.5 py-0.5 font-medium text-status-open">
                       {issues} usterek
                     </span>
                   )}
                   {tasks > 0 && (
-                    <span className="rounded-full bg-blue-100 px-1.5 py-0.5 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                    <span className="rounded-full bg-brand-soft px-1.5 py-0.5 font-medium text-brand">
                       {tasks} zadań
                     </span>
                   )}

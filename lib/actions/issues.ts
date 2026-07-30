@@ -26,6 +26,8 @@ async function revalidateIssuePaths(
   revalidatePath(`/projects/${floor.project_id}/floors/${floor.level}/${locationId}`)
   revalidatePath(`/projects/${floor.project_id}/floors/${floor.level}`)
   revalidatePath(`/projects/${floor.project_id}`)
+  // AppShell sidebar badge (open-issues count) lives in the project layout
+  revalidatePath(`/projects/${floor.project_id}`, "layout")
 }
 
 export async function createIssue(input: {

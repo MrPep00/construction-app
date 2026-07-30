@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { PlusIcon, WrenchIcon, CheckSquareIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
@@ -28,6 +29,18 @@ interface Props {
 export function LocationSidePanel({ issues, tasks, locationId, projectId, floorId }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("usterki")
   const [createDialog, setCreateDialog] = useState<"issue" | "task" | null>(null)
+  const pathname = usePathname()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // FAB deep link: /...?nowa-usterka=1 opens the new-issue dialog directly
+  useEffect(() => {
+    if (searchParams.get("nowa-usterka") === "1") {
+      setActiveTab("usterki")
+      setCreateDialog("issue")
+      router.replace(pathname, { scroll: false })
+    }
+  }, [searchParams, pathname, router])
 
   return (
     <>

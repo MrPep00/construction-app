@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/ui/sonner"
-import { Header } from "@/components/header"
+import { ThemeProvider } from "@/components/theme-provider"
 import { OfflineBanner } from "@/components/offline-banner"
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar"
 
@@ -48,13 +48,15 @@ export default function RootLayout({
     <html
       lang="pl"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">
-        <ServiceWorkerRegistrar />
-        <OfflineBanner />
-        <Header />
-        {children}
-        <Toaster />
+        <ThemeProvider>
+          <ServiceWorkerRegistrar />
+          <OfflineBanner />
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   )

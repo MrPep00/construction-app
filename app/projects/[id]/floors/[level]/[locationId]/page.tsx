@@ -99,7 +99,7 @@ export default async function LocationPage({
   const icon = TYPE_ICONS[location.type] ?? "📁"
 
   return (
-    <main className="container mx-auto max-w-5xl px-4 py-6">
+    <main className="px-4 py-6 md:px-6 lg:px-10">
       <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
         <Link href="/projects" className="hover:text-foreground">
           Projekty
