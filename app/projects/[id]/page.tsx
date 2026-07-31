@@ -111,19 +111,38 @@ export default async function ProjectDashboardPage({
   ])
   const filesTotal = fileCounts.reduce((sum, r) => sum + (r.count ?? 0), 0)
 
-  // Open-issue count per apartment (issues on rooms roll up to the apartment)
+  // Open-issue count per apartment (issues on rooms roll up to the apartment);
+  // issues without an apartment ancestor roll up to their floor instead.
   const openCountByApartment = new Map<string, number>()
+  const unassignedByFloor = new Map<string, number>()
   openIssues.forEach((issue) => {
     const aptId = apartmentAncestorId(issue.location_id, locationById)
     if (aptId) {
       openCountByApartment.set(aptId, (openCountByApartment.get(aptId) ?? 0) + 1)
+      return
+    }
+    const floorId = locationById.get(issue.location_id)?.floor_id
+    if (floorId) {
+      unassignedByFloor.set(floorId, (unassignedByFloor.get(floorId) ?? 0) + 1)
     }
   })
+
+  if (process.env.NODE_ENV !== "production") {
+    const accounted =
+      [...openCountByApartment.values()].reduce((a, b) => a + b, 0) +
+      [...unassignedByFloor.values()].reduce((a, b) => a + b, 0)
+    if (accounted !== openIssues.length) {
+      console.warn(
+        `dashboard matrix: ${openIssues.length} open issues but only ${accounted} accounted for in cells + floor badges`
+      )
+    }
+  }
 
   const matrixRows: MatrixRow[] = floorList.map((floor) => ({
     floorId: floor.id,
     level: floor.level,
     label: floor.label,
+    unassignedCount: unassignedByFloor.get(floor.id) ?? 0,
     apartments: locations
       .filter((l) => l.floor_id === floor.id && l.type === "apartment")
       .sort(
@@ -171,7 +190,7 @@ export default async function ProjectDashboardPage({
           <MetricCards
             metrics={[
               { label: "Otwarte usterki", value: openIssues.length },
-              { label: "Rozwiązane w tym tygodniu", value: resolvedThisWeek },
+              { label: "Usunięte w tym tygodniu", value: resolvedThisWeek },
               { label: "Zadania w toku", value: activeTasks },
               { label: "Pliki", value: filesTotal },
             ]}

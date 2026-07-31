@@ -13,6 +13,8 @@ export type MatrixRow = {
   floorId: string
   level: number
   label: string
+  /** Open issues on this floor's locations without an apartment ancestor */
+  unassignedCount: number
   apartments: MatrixApartment[]
 }
 
@@ -50,10 +52,18 @@ export function BuildingMatrix({
         <div key={row.floorId} className="flex items-start gap-3">
           <Link
             href={`/projects/${projectId}/floors/${row.level}`}
-            className="flex h-11 w-20 shrink-0 items-center rounded-lg px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex h-11 w-20 shrink-0 items-center gap-1 rounded-lg px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             title={row.label}
           >
             <span className="truncate">{row.label}</span>
+            {row.unassignedCount > 0 && (
+              <span
+                title="usterki poza mieszkaniami"
+                className="shrink-0 rounded-full bg-status-open-bg px-1.5 py-0.5 text-xs font-semibold tabular-nums text-status-open"
+              >
+                +{row.unassignedCount}
+              </span>
+            )}
           </Link>
 
           {row.apartments.length === 0 ? (
