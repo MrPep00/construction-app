@@ -1,13 +1,17 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { ImageIcon } from "lucide-react"
 import { formatDistanceToNowStrict } from "date-fns"
 import { pl } from "date-fns/locale"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { IssueStatus } from "@/lib/types/db"
+import { resolveIssue, reopenIssue } from "@/lib/actions/issues"
+import { Button } from "@/components/ui/button"
 import { StatusBadge } from "./StatusBadge"
 import {
   Select,
@@ -50,9 +54,43 @@ export function GlobalIssuesClient({
   floors: { id: string; level: number; label: string }[]
   apartments: { id: string; name: string; floorId: string }[]
 }) {
+  const router = useRouter()
   const [status, setStatus] = useState<StatusFilter>("open")
   const [floorId, setFloorId] = useState<string>(ALL)
   const [apartmentId, setApartmentId] = useState<string>(ALL)
+
+  // Local copy for optimistic status toggles; resyncs when server data refreshes
+  const [items, setItems] = useState(rows)
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
+  useEffect(() => setItems(rows), [rows])
+
+  async function toggleStatus(row: GlobalIssueRow) {
+    const next: IssueStatus = row.status === "open" ? "resolved" : "open"
+    const previous = row.status
+    setItems((prev) =>
+      prev.map((r) => (r.id === row.id ? { ...r, status: next } : r))
+    )
+    setPendingIds((prev) => new Set(prev).add(row.id))
+
+    const result =
+      next === "resolved" ? await resolveIssue(row.id) : await reopenIssue(row.id)
+
+    setPendingIds((prev) => {
+      const copy = new Set(prev)
+      copy.delete(row.id)
+      return copy
+    })
+
+    if (result.error) {
+      setItems((prev) =>
+        prev.map((r) => (r.id === row.id ? { ...r, status: previous } : r))
+      )
+      toast.error(result.error)
+    } else {
+      // Re-render server components so the sidebar open-count badge stays consistent
+      router.refresh()
+    }
+  }
 
   const apartmentOptions = useMemo(
     () =>
@@ -62,7 +100,7 @@ export function GlobalIssuesClient({
     [apartments, floorId]
   )
 
-  const filtered = rows.filter((r) => {
+  const filtered = items.filter((r) => {
     if (status !== "all" && r.status !== status) return false
     if (floorId !== ALL && r.floorId !== floorId) return false
     if (apartmentId !== ALL && r.apartmentId !== apartmentId) return false
@@ -132,10 +170,13 @@ export function GlobalIssuesClient({
       ) : (
         <ul className="flex flex-col gap-2">
           {filtered.map((row) => (
-            <li key={row.id}>
+            <li
+              key={row.id}
+              className="flex items-stretch gap-3 rounded-xl border border-border bg-card p-3"
+            >
               <Link
                 href={row.href}
-                className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-muted"
+                className="-m-3 flex min-w-0 flex-1 items-center gap-3 rounded-l-xl p-3 transition-colors hover:bg-muted"
               >
                 {row.thumbUrl ? (
                   <span className="relative size-16 shrink-0 overflow-hidden rounded-lg">
@@ -166,8 +207,19 @@ export function GlobalIssuesClient({
                     </p>
                   )}
                 </div>
-                <StatusBadge status={row.status} className="shrink-0" />
               </Link>
+              <div className="flex shrink-0 flex-col items-end justify-between gap-2">
+                <StatusBadge status={row.status} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pendingIds.has(row.id)}
+                  onClick={() => toggleStatus(row)}
+                >
+                  {row.status === "open" ? "Potwierdź usunięcie" : "Otwórz ponownie"}
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
