@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { DeleteProjectButton } from "./delete-project-button"
+import { LobbyBar } from "@/components/app-shell/LobbyBar"
 
 export default async function ProjectsPage() {
   const supabase = await createClient()
@@ -17,6 +18,8 @@ export default async function ProjectsPage() {
     .order("created_at", { ascending: false })
 
   return (
+    <>
+    <LobbyBar />
     <main className="container mx-auto max-w-5xl px-4 py-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Moje projekty</h1>
@@ -60,5 +63,6 @@ export default async function ProjectsPage() {
         </div>
       )}
     </main>
+    </>
   )
 }

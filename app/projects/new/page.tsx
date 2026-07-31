@@ -6,9 +6,12 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { NewProjectForm } from "./new-project-form"
+import { LobbyBar } from "@/components/app-shell/LobbyBar"
 
 export default function NewProjectPage() {
   return (
+    <>
+    <LobbyBar />
     <main className="flex justify-center px-4 py-12">
       <Card className="w-full max-w-md">
         <CardHeader>
@@ -23,5 +26,6 @@ export default function NewProjectPage() {
         </CardContent>
       </Card>
     </main>
+    </>
   )
 }
