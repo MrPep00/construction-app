@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { EllipsisVerticalIcon } from "lucide-react"
+import { EllipsisVerticalIcon, PlusIcon } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { TaskStatus } from "@/lib/types/db"
 import { TASK_STATUSES, taskStatusConfig } from "@/lib/status"
 import { updateTaskStatus } from "@/lib/actions/tasks"
 import { TaskListClient, type TaskRow } from "./TaskListClient"
-import type { FloorOption, ApartmentOption } from "./TaskForm"
+import { TaskForm, type FloorOption, type ApartmentOption } from "./TaskForm"
+import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,6 +97,7 @@ export function TasksKanbanClient({
   }, [tasks])
 
   const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
 
   async function moveTask(taskId: string, next: TaskStatus) {
     const current = items.find((t) => t.id === taskId)
@@ -130,7 +132,7 @@ export function TasksKanbanClient({
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex items-center justify-between gap-2">
         <Select value={floorId} onValueChange={(v) => updateFloor(v ?? ALL)}>
           <SelectTrigger className="min-h-9 w-auto rounded-full">
             <SelectValue />
@@ -144,6 +146,17 @@ export function TasksKanbanClient({
             ))}
           </SelectContent>
         </Select>
+
+        {/* Mobile list has its own create button (TaskListClient) */}
+        <Button
+          type="button"
+          size="sm"
+          className="hidden lg:inline-flex"
+          onClick={() => setShowCreate(true)}
+        >
+          <PlusIcon className="size-4" />
+          Nowe zadanie
+        </Button>
       </div>
 
       {/* Desktop: kanban (lg+) */}
@@ -175,6 +188,16 @@ export function TasksKanbanClient({
           apartments={apartments}
         />
       </div>
+
+      {showCreate && (
+        <TaskForm
+          mode="create"
+          projectId={projectId}
+          floors={floors}
+          apartments={apartments}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
     </div>
   )
 }
