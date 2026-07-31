@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { resolveFileUrls } from "@/lib/storage"
 import {
   apartmentAncestorId,
   shortFloorLabel,
@@ -73,6 +74,32 @@ export default async function ProjectIssuesPage({
     locations.map((l) => [l.id, l])
   )
 
+  // First photo per issue for the 64px row thumb
+  const issueIds = issues.map((i) => i.id)
+  const { data: photosData } =
+    issueIds.length > 0
+      ? await supabase
+          .from("files")
+          .select("issue_id, storage_path, storage_provider, created_at")
+          .in("issue_id", issueIds)
+          .like("mime_type", "image/%")
+          .order("created_at", { ascending: true })
+      : { data: [] }
+
+  const firstPhotoByIssue = new Map<
+    string,
+    { storage_path: string; storage_provider: "supabase" | "r2" }
+  >()
+  photosData?.forEach((p) => {
+    if (p.issue_id && !firstPhotoByIssue.has(p.issue_id)) {
+      firstPhotoByIssue.set(p.issue_id, p)
+    }
+  })
+  const thumbUrls = await resolveFileUrls(
+    [...firstPhotoByIssue.values()],
+    supabase
+  )
+
   const rows: GlobalIssueRow[] = issues.map((issue) => {
     const aptId = apartmentAncestorId(issue.location_id, locationById)
     const labelName = aptId
@@ -88,7 +115,10 @@ export default async function ProjectIssuesPage({
       apartmentId: aptId,
       locationLabel: `${labelName} · ${shortFloorLabel(issue.location.floor.level)}`,
       href: `/projects/${id}/floors/${issue.location.floor.level}/${issue.location_id}`,
-      thumbUrl: null,
+      thumbUrl: (() => {
+        const photo = firstPhotoByIssue.get(issue.id)
+        return photo ? (thumbUrls.get(photo.storage_path) ?? null) : null
+      })(),
     }
   })
 

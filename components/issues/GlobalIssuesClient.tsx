@@ -2,6 +2,10 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
+import { ImageIcon } from "lucide-react"
+import { formatDistanceToNowStrict } from "date-fns"
+import { pl } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import type { IssueStatus } from "@/lib/types/db"
 import { StatusBadge } from "./StatusBadge"
@@ -133,13 +137,36 @@ export function GlobalIssuesClient({
                 href={row.href}
                 className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-muted"
               >
+                {row.thumbUrl ? (
+                  <span className="relative size-16 shrink-0 overflow-hidden rounded-lg">
+                    <Image
+                      src={row.thumbUrl}
+                      alt=""
+                      fill
+                      sizes="64px"
+                      className="object-cover"
+                    />
+                  </span>
+                ) : (
+                  <span className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground/60">
+                    <ImageIcon className="size-6" />
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{row.title}</p>
                   <p className="truncate text-sm text-muted-foreground">
-                    {row.locationLabel}
+                    {row.locationLabel} ·{" "}
+                    {formatDistanceToNowStrict(new Date(row.createdAt), {
+                      locale: pl,
+                    })}
                   </p>
+                  {row.contractor && (
+                    <p className="truncate text-sm text-muted-foreground/80">
+                      {row.contractor}
+                    </p>
+                  )}
                 </div>
-                <StatusBadge status={row.status} />
+                <StatusBadge status={row.status} className="shrink-0" />
               </Link>
             </li>
           ))}
