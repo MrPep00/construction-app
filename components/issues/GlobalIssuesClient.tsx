@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -109,7 +109,20 @@ export function GlobalIssuesClient({
   // Local copy for optimistic status toggles; resyncs when server data refreshes
   const [items, setItems] = useState(rows)
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
-  useEffect(() => setItems(rows), [rows])
+  const pendingIdsRef = useRef(pendingIds)
+  pendingIdsRef.current = pendingIds
+  useEffect(() => {
+    // Keep the optimistic status of in-flight toggles: a refetch that lands
+    // mid-action must not visually revert them (server truth arrives via the
+    // post-action router.refresh()).
+    setItems((prev) =>
+      rows.map((row) => {
+        if (!pendingIdsRef.current.has(row.id)) return row
+        const local = prev.find((p) => p.id === row.id)
+        return local ? { ...row, status: local.status } : row
+      })
+    )
+  }, [rows])
 
   async function toggleStatus(row: GlobalIssueRow) {
     const next: IssueStatus = row.status === "open" ? "resolved" : "open"
