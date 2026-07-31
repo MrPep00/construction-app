@@ -34,7 +34,7 @@ export function ThemeToggle({ collapsed = false }: Props) {
       <button
         type="button"
         onClick={() => setTheme(next.value)}
-        className="flex min-h-11 w-full items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="tap-target flex min-h-11 w-full items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         title={`Motyw: ${current.label} (kliknij: ${next.label})`}
         aria-label={`Motyw: ${current.label}`}
       >
@@ -53,7 +53,7 @@ export function ThemeToggle({ collapsed = false }: Props) {
           aria-checked={theme === value}
           onClick={() => setTheme(value)}
           className={cn(
-            "flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-xs transition-colors",
+            "tap-target flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-xs transition-colors",
             theme === value
               ? "bg-brand-soft font-medium text-brand"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"

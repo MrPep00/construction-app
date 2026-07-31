@@ -68,7 +68,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={toggleCollapsed}
-          className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="tap-target flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label={collapsed ? "Rozwiń panel boczny" : "Zwiń panel boczny"}
         >
           {collapsed ? <PanelLeftIcon className="size-5" /> : <PanelLeftCloseIcon className="size-5" />}

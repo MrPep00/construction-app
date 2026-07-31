@@ -168,14 +168,25 @@
   }
 }
 
-/* Ensure tap targets meet 44px minimum on mobile */
-@media (max-width: 768px) {
-  button,
-  [role="button"],
-  a,
-  input[type="checkbox"],
-  input[type="radio"],
-  select {
+/* Touch targets: visual size and hit area are separate concerns.
+   Small controls keep their visual size; .tap-target expands the
+   interactive area to >=44px without changing layout.
+
+   Conventions:
+   - Primary controls (buttons, nav items, FAB, list-row actions):
+     visually >=44px on coarse pointers via their own classes (h-11).
+   - Small controls (filter chips, toggles, icon buttons): compact
+     visual size + className "tap-target".
+   - Native checkbox/radio: wrap in a >=44px label instead of inflating
+     the input. */
+@media (pointer: coarse) {
+  .tap-target {
+    position: relative;
+  }
+  .tap-target::after {
+    content: "";
+    position: absolute;
+    inset: max(0px, calc((44px - 100%) / -2)) 0;
     min-height: 44px;
   }
 }
