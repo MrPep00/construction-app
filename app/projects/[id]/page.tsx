@@ -5,6 +5,15 @@ import { createClient } from "@/lib/supabase/server"
 import { buttonVariants } from "@/components/ui/button"
 import { ProjectTasksSidePanel } from "@/components/tasks/ProjectTasksSidePanel"
 import { BuildingMatrix, type MatrixRow } from "@/components/dashboard/BuildingMatrix"
+import { MetricCards } from "@/components/dashboard/MetricCards"
+
+/** Monday 00:00 of the current week (server time). */
+function startOfWeek(): Date {
+  const d = new Date()
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  d.setHours(0, 0, 0, 0)
+  return d
+}
 
 type LocationRow = {
   id: string
@@ -62,22 +71,54 @@ export default async function ProjectDashboardPage({
   const locations: LocationRow[] = allLocations ?? []
   const locationById = new Map(locations.map((l) => [l.id, l]))
 
+  const locationIds = locations.map((l) => l.id)
+
+  const [issuesRes, tasksRes] = await Promise.all([
+    locationIds.length > 0
+      ? supabase
+          .from("issues")
+          .select("id, location_id, status, resolved_at")
+          .in("location_id", locationIds)
+      : Promise.resolve({ data: [] }),
+    supabase.from("tasks").select("id, status").eq("project_id", id),
+  ])
+
+  const issues = issuesRes.data ?? []
+  const tasks = tasksRes.data ?? []
+
+  const openIssues = issues.filter((i) => i.status === "open")
+  const weekStart = startOfWeek()
+  const resolvedThisWeek = issues.filter(
+    (i) =>
+      i.status === "resolved" &&
+      i.resolved_at &&
+      new Date(i.resolved_at) >= weekStart
+  ).length
+  const activeTasks = tasks.filter(
+    (t) => t.status === "todo" || t.status === "doing"
+  ).length
+
+  const countFiles = (column: "location_id" | "floor_id" | "issue_id" | "task_id", ids: string[]) =>
+    ids.length > 0
+      ? supabase.from("files").select("id", { count: "exact", head: true }).in(column, ids)
+      : Promise.resolve({ count: 0 })
+
+  const fileCounts = await Promise.all([
+    countFiles("location_id", locationIds),
+    countFiles("floor_id", floorIds),
+    countFiles("issue_id", issues.map((i) => i.id)),
+    countFiles("task_id", tasks.map((t) => t.id)),
+  ])
+  const filesTotal = fileCounts.reduce((sum, r) => sum + (r.count ?? 0), 0)
+
   // Open-issue count per apartment (issues on rooms roll up to the apartment)
   const openCountByApartment = new Map<string, number>()
-  if (locations.length > 0) {
-    const { data: openIssues } = await supabase
-      .from("issues")
-      .select("location_id")
-      .eq("status", "open")
-      .in("location_id", locations.map((l) => l.id))
-
-    openIssues?.forEach((issue) => {
-      const aptId = apartmentAncestorId(issue.location_id, locationById)
-      if (aptId) {
-        openCountByApartment.set(aptId, (openCountByApartment.get(aptId) ?? 0) + 1)
-      }
-    })
-  }
+  openIssues.forEach((issue) => {
+    const aptId = apartmentAncestorId(issue.location_id, locationById)
+    if (aptId) {
+      openCountByApartment.set(aptId, (openCountByApartment.get(aptId) ?? 0) + 1)
+    }
+  })
 
   const matrixRows: MatrixRow[] = floorList.map((floor) => ({
     floorId: floor.id,
@@ -126,7 +167,17 @@ export default async function ProjectDashboardPage({
       </div>
 
       <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
-        <BuildingMatrix projectId={id} rows={matrixRows} />
+        <div>
+          <MetricCards
+            metrics={[
+              { label: "Otwarte usterki", value: openIssues.length },
+              { label: "Rozwiązane w tym tygodniu", value: resolvedThisWeek },
+              { label: "Zadania w toku", value: activeTasks },
+              { label: "Pliki", value: filesTotal },
+            ]}
+          />
+          <BuildingMatrix projectId={id} rows={matrixRows} />
+        </div>
 
         <aside className="mt-6 lg:mt-0">
           <Suspense
