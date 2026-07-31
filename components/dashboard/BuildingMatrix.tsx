@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { getIssueStatusConfig } from "@/lib/status"
+import { buttonVariants } from "@/components/ui/button"
 
 export type MatrixApartment = {
   id: string
@@ -22,6 +23,27 @@ export function BuildingMatrix({
   projectId: string
   rows: MatrixRow[]
 }) {
+  if (rows.every((r) => r.apartments.length === 0)) {
+    const targetLevel =
+      rows.find((r) => r.level === 0)?.level ?? rows[0]?.level ?? 0
+    return (
+      <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
+        <div>
+          <p className="font-medium">Brak mieszkań w projekcie</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Dodaj mieszkania na piętrach, aby zobaczyć matrycę budynku.
+          </p>
+        </div>
+        <Link
+          href={`/projects/${projectId}/floors/${targetLevel}`}
+          className={buttonVariants({ size: "sm" })}
+        >
+          Dodaj strukturę
+        </Link>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
       {rows.map((row) => (
