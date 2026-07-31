@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { ImageIcon } from "lucide-react"
@@ -37,6 +37,13 @@ export type GlobalIssueRow = {
 
 type StatusFilter = "open" | "resolved" | "all"
 
+type Filters = {
+  status: StatusFilter
+  floorId: string
+  apartmentId: string
+  contractor: string
+}
+
 const STATUS_CHIPS: { value: StatusFilter; label: string }[] = [
   { value: "open", label: "Otwarte" },
   { value: "resolved", label: "Usunięte" },
@@ -44,20 +51,60 @@ const STATUS_CHIPS: { value: StatusFilter; label: string }[] = [
 ]
 
 const ALL = "all"
+/** URL/select sentinel for contractor IS NULL */
+const NO_CONTRACTOR = "__none__"
+
+function filtersToParams(filters: Filters): URLSearchParams {
+  const params = new URLSearchParams()
+  if (filters.status !== "open") params.set("status", filters.status)
+  if (filters.floorId !== ALL) params.set("floor", filters.floorId)
+  if (filters.apartmentId !== ALL) params.set("apartment", filters.apartmentId)
+  if (filters.contractor !== ALL) params.set("contractor", filters.contractor)
+  return params
+}
 
 export function GlobalIssuesClient({
   rows,
   floors,
   apartments,
+  hasMore,
+  limit,
 }: {
   rows: GlobalIssueRow[]
   floors: { id: string; level: number; label: string }[]
   apartments: { id: string; name: string; floorId: string }[]
+  hasMore: boolean
+  limit: number
 }) {
   const router = useRouter()
-  const [status, setStatus] = useState<StatusFilter>("open")
-  const [floorId, setFloorId] = useState<string>(ALL)
-  const [apartmentId, setApartmentId] = useState<string>(ALL)
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const [filters, setFilters] = useState<Filters>(() => {
+    const status = searchParams.get("status")
+    return {
+      status: status === "resolved" || status === "all" ? status : "open",
+      floorId: searchParams.get("floor") ?? ALL,
+      apartmentId: searchParams.get("apartment") ?? ALL,
+      contractor: searchParams.get("contractor") ?? ALL,
+    }
+  })
+
+  function updateFilters(patch: Partial<Filters>) {
+    const next = { ...filters, ...patch }
+    setFilters(next)
+    // Filter change resets pagination (limit param intentionally dropped)
+    const params = filtersToParams(next)
+    router.replace(params.size > 0 ? `${pathname}?${params}` : pathname, {
+      scroll: false,
+    })
+  }
+
+  function showMore() {
+    const params = filtersToParams(filters)
+    params.set("limit", String(limit + 200))
+    router.replace(`${pathname}?${params}`, { scroll: false })
+  }
 
   // Local copy for optimistic status toggles; resyncs when server data refreshes
   const [items, setItems] = useState(rows)
@@ -94,16 +141,33 @@ export function GlobalIssuesClient({
 
   const apartmentOptions = useMemo(
     () =>
-      floorId === ALL
+      filters.floorId === ALL
         ? apartments
-        : apartments.filter((a) => a.floorId === floorId),
-    [apartments, floorId]
+        : apartments.filter((a) => a.floorId === filters.floorId),
+    [apartments, filters.floorId]
+  )
+
+  // Distinct contractors from the loaded page of rows
+  const contractorOptions = useMemo(
+    () =>
+      [...new Set(rows.map((r) => r.contractor).filter((c): c is string => !!c))].sort(
+        (a, b) => a.localeCompare(b, "pl")
+      ),
+    [rows]
   )
 
   const filtered = items.filter((r) => {
-    if (status !== "all" && r.status !== status) return false
-    if (floorId !== ALL && r.floorId !== floorId) return false
-    if (apartmentId !== ALL && r.apartmentId !== apartmentId) return false
+    if (filters.status !== "all" && r.status !== filters.status) return false
+    if (filters.floorId !== ALL && r.floorId !== filters.floorId) return false
+    if (filters.apartmentId !== ALL && r.apartmentId !== filters.apartmentId)
+      return false
+    if (filters.contractor !== ALL) {
+      if (filters.contractor === NO_CONTRACTOR) {
+        if (r.contractor !== null) return false
+      } else if (r.contractor !== filters.contractor) {
+        return false
+      }
+    }
     return true
   })
 
@@ -115,10 +179,10 @@ export function GlobalIssuesClient({
             <button
               key={chip.value}
               type="button"
-              onClick={() => setStatus(chip.value)}
+              onClick={() => updateFilters({ status: chip.value })}
               className={cn(
                 "min-h-9 shrink-0 rounded-full border px-3.5 text-sm font-medium transition-colors",
-                status === chip.value
+                filters.status === chip.value
                   ? "border-brand bg-brand-soft text-brand"
                   : "border-border bg-card text-muted-foreground hover:bg-muted"
               )}
@@ -129,11 +193,10 @@ export function GlobalIssuesClient({
         </div>
 
         <Select
-          value={floorId}
-          onValueChange={(v) => {
-            setFloorId(v ?? ALL)
-            setApartmentId(ALL)
-          }}
+          value={filters.floorId}
+          onValueChange={(v) =>
+            updateFilters({ floorId: v ?? ALL, apartmentId: ALL })
+          }
         >
           <SelectTrigger className="min-h-9 w-auto shrink-0 rounded-full">
             <SelectValue />
@@ -148,7 +211,10 @@ export function GlobalIssuesClient({
           </SelectContent>
         </Select>
 
-        <Select value={apartmentId} onValueChange={(v) => setApartmentId(v ?? ALL)}>
+        <Select
+          value={filters.apartmentId}
+          onValueChange={(v) => updateFilters({ apartmentId: v ?? ALL })}
+        >
           <SelectTrigger className="min-h-9 w-auto shrink-0 rounded-full">
             <SelectValue />
           </SelectTrigger>
@@ -157,6 +223,24 @@ export function GlobalIssuesClient({
             {apartmentOptions.map((a) => (
               <SelectItem key={a.id} value={a.id}>
                 {a.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.contractor}
+          onValueChange={(v) => updateFilters({ contractor: v ?? ALL })}
+        >
+          <SelectTrigger className="min-h-9 w-auto shrink-0 rounded-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Wszyscy</SelectItem>
+            <SelectItem value={NO_CONTRACTOR}>Nieprzypisany</SelectItem>
+            {contractorOptions.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
               </SelectItem>
             ))}
           </SelectContent>
@@ -223,6 +307,14 @@ export function GlobalIssuesClient({
             </li>
           ))}
         </ul>
+      )}
+
+      {hasMore && (
+        <div className="mt-4 flex justify-center">
+          <Button type="button" variant="outline" onClick={showMore}>
+            Pokaż więcej
+          </Button>
+        </div>
       )}
     </div>
   )

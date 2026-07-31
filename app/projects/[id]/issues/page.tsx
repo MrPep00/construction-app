@@ -27,12 +27,22 @@ type JoinedIssue = {
   }
 }
 
+const DEFAULT_LIMIT = 200
+const MAX_LIMIT = 2000
+
 export default async function ProjectIssuesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ limit?: string }>
 }) {
   const { id } = await params
+  const { limit: limitParam } = await searchParams
+  const limit = Math.min(
+    Math.max(Number(limitParam) || DEFAULT_LIMIT, DEFAULT_LIMIT),
+    MAX_LIMIT
+  )
   const supabase = await createClient()
 
   const { data: project } = await supabase
@@ -54,11 +64,14 @@ export default async function ProjectIssuesPage({
         "id, title, status, created_at, contractor, location_id, location:locations!inner(id, name, parent_id, floor_id, floor:floors!inner(id, level, project_id))"
       )
       .eq("location.floor.project_id", id)
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(limit + 1),
   ])
 
   const floors = floorsRes.data ?? []
-  const issues = (issuesRes.data ?? []) as unknown as JoinedIssue[]
+  const fetched = (issuesRes.data ?? []) as unknown as JoinedIssue[]
+  const hasMore = fetched.length > limit
+  const issues = hasMore ? fetched.slice(0, limit) : fetched
 
   const floorIds = floors.map((f) => f.id)
   const { data: locationsData } =
@@ -134,6 +147,8 @@ export default async function ProjectIssuesPage({
         rows={rows}
         floors={floors}
         apartments={apartments}
+        hasMore={hasMore}
+        limit={limit}
       />
     </main>
   )
