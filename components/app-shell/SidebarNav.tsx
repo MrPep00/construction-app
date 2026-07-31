@@ -33,7 +33,7 @@ export function SidebarNav({ projectId, openIssueCount, collapsed }: Props) {
 
   const items: NavItem[] = [
     { label: "Pulpit", href: base, icon: LayoutDashboardIcon },
-    { label: "Usterki", icon: CircleAlertIcon, disabled: true, badge: openIssueCount },
+    { label: "Usterki", href: `${base}/issues`, icon: CircleAlertIcon, badge: openIssueCount },
     { label: "Zadania", icon: ClipboardListIcon, disabled: true },
     { label: "Pliki", icon: FolderIcon, disabled: true },
     { label: "Notatki", href: `${base}/notes`, icon: StickyNoteIcon },

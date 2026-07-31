@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { ProjectTasksSidePanel } from "@/components/tasks/ProjectTasksSidePanel"
 import { BuildingMatrix, type MatrixRow } from "@/components/dashboard/BuildingMatrix"
 import { MetricCards } from "@/components/dashboard/MetricCards"
+import { apartmentAncestorId } from "@/lib/locations"
 
 /** Monday 00:00 of the current week (server time). */
 function startOfWeek(): Date {
@@ -22,20 +23,6 @@ type LocationRow = {
   name: string
   type: string
   sort_order: number
-}
-
-/** Walks parent_id chain to the containing apartment (issues may sit on rooms). */
-function apartmentAncestorId(
-  locationId: string,
-  byId: Map<string, LocationRow>
-): string | null {
-  let current = byId.get(locationId)
-  let guard = 0
-  while (current && guard++ < 20) {
-    if (current.type === "apartment") return current.id
-    current = current.parent_id ? byId.get(current.parent_id) : undefined
-  }
-  return null
 }
 
 export default async function ProjectDashboardPage({

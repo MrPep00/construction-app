@@ -30,7 +30,7 @@ export function MobileNav({ projectId, openIssueCount }: Props) {
 
   const items: NavItem[] = [
     { label: "Budynek", href: base, icon: Building2Icon },
-    { label: "Usterki", icon: CircleAlertIcon, disabled: true, badge: openIssueCount },
+    { label: "Usterki", href: `${base}/issues`, icon: CircleAlertIcon, badge: openIssueCount },
     { label: "Zadania", icon: ClipboardListIcon, disabled: true },
     { label: "Pliki", icon: FolderIcon, disabled: true },
   ]
@@ -43,7 +43,9 @@ export function MobileNav({ projectId, openIssueCount }: Props) {
       <div className="grid grid-cols-4">
         {items.map((item) => {
           const active = item.href
-            ? pathname === item.href || pathname.startsWith(`${base}/floors`)
+            ? item.href === base
+              ? pathname === base || pathname.startsWith(`${base}/floors`)
+              : pathname.startsWith(item.href)
             : false
           const Icon = item.icon
           const showBadge = (item.badge ?? 0) > 0

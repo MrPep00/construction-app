@@ -27,8 +27,8 @@ export const issueStatusConfig: Record<IssueStatus, IssueStatusConfig> = {
     icon: CircleAlertIcon,
   },
   resolved: {
-    label: "Rozwiązana",
-    sectionLabel: "Rozwiązane",
+    label: "Usunięta",
+    sectionLabel: "Usunięte",
     badgeClass: "border border-status-resolved-bd bg-status-resolved-bg text-status-resolved",
     dotClass: "bg-status-resolved",
     cellClass: "border-status-resolved-bd bg-status-resolved-bg text-status-resolved",
