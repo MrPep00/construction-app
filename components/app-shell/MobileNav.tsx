@@ -31,7 +31,7 @@ export function MobileNav({ projectId, openIssueCount }: Props) {
   const items: NavItem[] = [
     { label: "Budynek", href: base, icon: Building2Icon },
     { label: "Usterki", href: `${base}/issues`, icon: CircleAlertIcon, badge: openIssueCount },
-    { label: "Zadania", icon: ClipboardListIcon, disabled: true },
+    { label: "Zadania", href: `${base}/tasks`, icon: ClipboardListIcon },
     { label: "Pliki", icon: FolderIcon, disabled: true },
   ]
 

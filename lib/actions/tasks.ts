@@ -20,6 +20,8 @@ export type TaskWithScope = {
   floor_label: string | null
   location_id: string | null
   location_name: string | null
+  /** Only populated by getProjectTasks (kanban creator initials) */
+  created_by?: string | null
 }
 
 async function revalidateTaskPaths(
@@ -262,7 +264,7 @@ export async function getProjectTasks(projectId: string): Promise<TaskWithScope[
 
     const { data: tasks } = await supabase
       .from("tasks")
-      .select("id, title, description, status, priority, due_date, created_at, floor_id, location_id")
+      .select("id, title, description, status, priority, due_date, created_at, floor_id, location_id, created_by")
       .eq("project_id", projectId)
       .order("priority", { ascending: true })
 
@@ -274,9 +276,9 @@ export async function getProjectTasks(projectId: string): Promise<TaskWithScope[
     if (floorIds.length > 0) {
       const { data: floors } = await supabase
         .from("floors")
-        .select("id, name")
+        .select("id, label")
         .in("id", floorIds)
-      ;(floors ?? []).forEach((f) => floorLabelMap.set(f.id, f.name))
+      ;(floors ?? []).forEach((f) => floorLabelMap.set(f.id, f.label))
     }
 
     // Resolve location names
@@ -302,6 +304,7 @@ export async function getProjectTasks(projectId: string): Promise<TaskWithScope[
       floor_label: t.floor_id ? (floorLabelMap.get(t.floor_id) ?? null) : null,
       location_id: t.location_id,
       location_name: t.location_id ? (locationNameMap.get(t.location_id) ?? null) : null,
+      created_by: t.created_by,
     }))
   } catch {
     return []
@@ -315,10 +318,10 @@ export async function getFloorTasks(floorId: string): Promise<TaskWithScope[]> {
 
     const { data: floor } = await supabase
       .from("floors")
-      .select("name")
+      .select("label")
       .eq("id", floorId)
       .single()
-    const floorLabel = floor?.name ?? null
+    const floorLabel = floor?.label ?? null
 
     const { data: floorTasks } = await supabase
       .from("tasks")

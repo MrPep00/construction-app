@@ -1,5 +1,11 @@
-import { CircleAlertIcon, CircleCheckIcon, type LucideIcon } from "lucide-react"
-import type { IssueStatus } from "@/lib/types/db"
+import {
+  CircleAlertIcon,
+  CircleCheckIcon,
+  CircleDashedIcon,
+  CircleDotIcon,
+  type LucideIcon,
+} from "lucide-react"
+import type { IssueStatus, TaskStatus } from "@/lib/types/db"
 
 export type IssueStatusConfig = {
   /** Polish UI label, feminine form (usterka) */
@@ -32,6 +38,39 @@ export const issueStatusConfig: Record<IssueStatus, IssueStatusConfig> = {
     badgeClass: "border border-status-resolved-bd bg-status-resolved-bg text-status-resolved",
     dotClass: "bg-status-resolved",
     cellClass: "border-status-resolved-bd bg-status-resolved-bg text-status-resolved",
+    icon: CircleCheckIcon,
+  },
+}
+
+export type TaskStatusConfig = {
+  /** Polish UI label / kanban column header */
+  label: string
+  /** Small round indicator dot (column header) */
+  dotClass: string
+  /** Kanban column surface */
+  columnClass: string
+  icon: LucideIcon
+}
+
+export const TASK_STATUSES: TaskStatus[] = ["todo", "doing", "done"]
+
+export const taskStatusConfig: Record<TaskStatus, TaskStatusConfig> = {
+  todo: {
+    label: "Do zrobienia",
+    dotClass: "bg-muted-foreground/50",
+    columnClass: "bg-muted",
+    icon: CircleDashedIcon,
+  },
+  doing: {
+    label: "W trakcie",
+    dotClass: "bg-brand",
+    columnClass: "bg-muted",
+    icon: CircleDotIcon,
+  },
+  done: {
+    label: "Zrobione",
+    dotClass: "bg-status-resolved",
+    columnClass: "bg-muted",
     icon: CircleCheckIcon,
   },
 }
