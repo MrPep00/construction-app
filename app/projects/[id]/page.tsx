@@ -4,6 +4,30 @@ import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { buttonVariants } from "@/components/ui/button"
 import { ProjectTasksSidePanel } from "@/components/tasks/ProjectTasksSidePanel"
+import { BuildingMatrix, type MatrixRow } from "@/components/dashboard/BuildingMatrix"
+
+type LocationRow = {
+  id: string
+  floor_id: string
+  parent_id: string | null
+  name: string
+  type: string
+  sort_order: number
+}
+
+/** Walks parent_id chain to the containing apartment (issues may sit on rooms). */
+function apartmentAncestorId(
+  locationId: string,
+  byId: Map<string, LocationRow>
+): string | null {
+  let current = byId.get(locationId)
+  let guard = 0
+  while (current && guard++ < 20) {
+    if (current.type === "apartment") return current.id
+    current = current.parent_id ? byId.get(current.parent_id) : undefined
+  }
+  return null
+}
 
 export default async function ProjectDashboardPage({
   params,
@@ -30,62 +54,48 @@ export default async function ProjectDashboardPage({
   const floorList = floors ?? []
   const floorIds = floorList.map((f) => f.id)
 
-  // Fetch locations with type and parent_id for apartment counting
   const { data: allLocations } = await supabase
     .from("locations")
-    .select("id, floor_id, type, parent_id")
+    .select("id, floor_id, parent_id, name, type, sort_order")
     .in("floor_id", floorIds)
 
-  const locationIdToFloorId: Record<string, string> = {}
-  allLocations?.forEach((l) => {
-    locationIdToFloorId[l.id] = l.floor_id
-  })
+  const locations: LocationRow[] = allLocations ?? []
+  const locationById = new Map(locations.map((l) => [l.id, l]))
 
-  // Count apartments (type='apartment') per floor
-  const tenantChangesByFloor: Record<string, number> = Object.fromEntries(
-    floorIds.map((fid) => [fid, 0])
-  )
-  allLocations?.forEach((l) => {
-    if (l.type === "apartment") {
-      tenantChangesByFloor[l.floor_id] = (tenantChangesByFloor[l.floor_id] ?? 0) + 1
-    }
-  })
-
-  // Count open issues per floor
-  const openIssuesByFloor: Record<string, number> = Object.fromEntries(
-    floorIds.map((fid) => [fid, 0])
-  )
-  const locationIds = Object.keys(locationIdToFloorId)
-  if (locationIds.length > 0) {
+  // Open-issue count per apartment (issues on rooms roll up to the apartment)
+  const openCountByApartment = new Map<string, number>()
+  if (locations.length > 0) {
     const { data: openIssues } = await supabase
       .from("issues")
       .select("location_id")
       .eq("status", "open")
-      .in("location_id", locationIds)
+      .in("location_id", locations.map((l) => l.id))
 
     openIssues?.forEach((issue) => {
-      const fid = locationIdToFloorId[issue.location_id]
-      if (fid) openIssuesByFloor[fid] = (openIssuesByFloor[fid] ?? 0) + 1
-    })
-  }
-
-  // Count active tasks (todo + doing) per floor
-  const activeTasksByFloor: Record<string, number> = Object.fromEntries(
-    floorIds.map((fid) => [fid, 0])
-  )
-  if (floorIds.length > 0) {
-    const { data: activeTasks } = await supabase
-      .from("tasks")
-      .select("floor_id")
-      .in("floor_id", floorIds)
-      .in("status", ["todo", "doing"])
-
-    activeTasks?.forEach((task) => {
-      if (task.floor_id) {
-        activeTasksByFloor[task.floor_id] = (activeTasksByFloor[task.floor_id] ?? 0) + 1
+      const aptId = apartmentAncestorId(issue.location_id, locationById)
+      if (aptId) {
+        openCountByApartment.set(aptId, (openCountByApartment.get(aptId) ?? 0) + 1)
       }
     })
   }
+
+  const matrixRows: MatrixRow[] = floorList.map((floor) => ({
+    floorId: floor.id,
+    level: floor.level,
+    label: floor.label,
+    apartments: locations
+      .filter((l) => l.floor_id === floor.id && l.type === "apartment")
+      .sort(
+        (a, b) =>
+          a.sort_order - b.sort_order ||
+          a.name.localeCompare(b.name, "pl", { numeric: true })
+      )
+      .map((l) => ({
+        id: l.id,
+        name: l.name,
+        openCount: openCountByApartment.get(l.id) ?? 0,
+      })),
+  }))
 
   return (
     <main className="px-4 py-6 md:px-6 lg:px-10">
@@ -116,40 +126,7 @@ export default async function ProjectDashboardPage({
       </div>
 
       <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
-        <div className="flex flex-col gap-0.5">
-          {floorList.map((floor) => {
-            const issues = openIssuesByFloor[floor.id] ?? 0
-            const tasks = activeTasksByFloor[floor.id] ?? 0
-            const apartments = tenantChangesByFloor[floor.id] ?? 0
-
-            return (
-              <Link
-                key={floor.id}
-                href={`/projects/${id}/floors/${floor.level}`}
-                className="flex min-h-[44px] items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/50 md:min-h-0 md:py-1.5"
-              >
-                <span>{floor.label}</span>
-                <div className="flex items-center gap-2 text-xs">
-                  {issues > 0 && (
-                    <span className="rounded-full bg-status-open-bg px-1.5 py-0.5 font-medium text-status-open">
-                      {issues} usterek
-                    </span>
-                  )}
-                  {tasks > 0 && (
-                    <span className="rounded-full bg-brand-soft px-1.5 py-0.5 font-medium text-brand">
-                      {tasks} zadań
-                    </span>
-                  )}
-                  {apartments > 0 && (
-                    <span className="text-muted-foreground">
-                      🏠 {apartments}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            )
-          })}
-        </div>
+        <BuildingMatrix projectId={id} rows={matrixRows} />
 
         <aside className="mt-6 lg:mt-0">
           <Suspense
