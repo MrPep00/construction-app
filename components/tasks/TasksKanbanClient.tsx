@@ -1,12 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { EllipsisVerticalIcon } from "lucide-react"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { TaskStatus } from "@/lib/types/db"
 import { TASK_STATUSES, taskStatusConfig } from "@/lib/status"
+import { updateTaskStatus } from "@/lib/actions/tasks"
 import { TaskListClient, type TaskRow } from "./TaskListClient"
 import type { FloorOption, ApartmentOption } from "./TaskForm"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Select,
   SelectContent,
@@ -69,8 +79,54 @@ export function TasksKanbanClient({
     })
   }
 
+  // Local copy for optimistic moves; in-flight tasks keep their optimistic
+  // status when server data refreshes (same pattern as GlobalIssuesClient)
+  const [items, setItems] = useState(tasks)
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
+  const pendingIdsRef = useRef(pendingIds)
+  pendingIdsRef.current = pendingIds
+  useEffect(() => {
+    setItems((prev) =>
+      tasks.map((task) => {
+        if (!pendingIdsRef.current.has(task.id)) return task
+        const local = prev.find((p) => p.id === task.id)
+        return local ? { ...task, status: local.status } : task
+      })
+    )
+  }, [tasks])
+
+  const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null)
+
+  async function moveTask(taskId: string, next: TaskStatus) {
+    const current = items.find((t) => t.id === taskId)
+    if (!current || current.status === next) return
+    const previous = current.status
+
+    setItems((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, status: next } : t))
+    )
+    setPendingIds((prev) => new Set(prev).add(taskId))
+
+    const result = await updateTaskStatus(taskId, next)
+
+    setPendingIds((prev) => {
+      const copy = new Set(prev)
+      copy.delete(taskId)
+      return copy
+    })
+
+    if (result.error) {
+      setItems((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: previous } : t))
+      )
+      toast.error(result.error)
+    } else {
+      router.refresh()
+    }
+  }
+
   const filtered =
-    floorId === ALL ? tasks : tasks.filter((t) => t.effectiveFloorId === floorId)
+    floorId === ALL ? items : items.filter((t) => t.effectiveFloorId === floorId)
 
   return (
     <div>
@@ -97,6 +153,15 @@ export function TasksKanbanClient({
             key={status}
             status={status}
             tasks={filtered.filter((t) => t.status === status)}
+            pendingIds={pendingIds}
+            isDropTarget={dropTarget === status}
+            onDragEnterColumn={() => setDropTarget(status)}
+            onDragLeaveColumn={() => setDropTarget(null)}
+            onDropTask={(taskId) => {
+              setDropTarget(null)
+              void moveTask(taskId, status)
+            }}
+            onMoveTask={moveTask}
           />
         ))}
       </div>
@@ -117,13 +182,45 @@ export function TasksKanbanClient({
 function KanbanColumn({
   status,
   tasks,
+  pendingIds,
+  isDropTarget,
+  onDragEnterColumn,
+  onDragLeaveColumn,
+  onDropTask,
+  onMoveTask,
 }: {
   status: TaskStatus
   tasks: KanbanTask[]
+  pendingIds: Set<string>
+  isDropTarget: boolean
+  onDragEnterColumn: () => void
+  onDragLeaveColumn: () => void
+  onDropTask: (taskId: string) => void
+  onMoveTask: (taskId: string, next: TaskStatus) => void
 }) {
   const config = taskStatusConfig[status]
   return (
-    <section className={cn("rounded-xl p-3", config.columnClass)}>
+    <section
+      className={cn(
+        "rounded-xl p-3 transition-colors",
+        config.columnClass,
+        isDropTarget && "bg-brand-soft ring-1 ring-brand"
+      )}
+      onDragOver={(e) => {
+        e.preventDefault()
+        onDragEnterColumn()
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          onDragLeaveColumn()
+        }
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        const taskId = e.dataTransfer.getData("text/plain")
+        if (taskId) onDropTask(taskId)
+      }}
+    >
       <header className="mb-3 flex items-center gap-2 px-1">
         <span className={cn("size-2 rounded-full", config.dotClass)} />
         <h2 className="text-sm font-semibold">{config.label}</h2>
@@ -139,7 +236,12 @@ function KanbanColumn({
       ) : (
         <ul className="flex flex-col gap-2">
           {tasks.map((task) => (
-            <KanbanCard key={task.id} task={task} />
+            <KanbanCard
+              key={task.id}
+              task={task}
+              pending={pendingIds.has(task.id)}
+              onMove={(next) => onMoveTask(task.id, next)}
+            />
           ))}
         </ul>
       )}
@@ -147,16 +249,49 @@ function KanbanColumn({
   )
 }
 
-function KanbanCard({ task }: { task: KanbanTask }) {
+function KanbanCard({
+  task,
+  pending,
+  onMove,
+}: {
+  task: KanbanTask
+  pending: boolean
+  onMove: (next: TaskStatus) => void
+}) {
   const overdue = isOverdue(task)
   return (
     <li
+      draggable={!pending}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", task.id)
+        e.dataTransfer.effectAllowed = "move"
+      }}
       className={cn(
         "rounded-lg border bg-card p-3",
-        overdue ? "border-status-open-bd" : "border-border-soft"
+        overdue ? "border-status-open-bd" : "border-border-soft",
+        pending ? "opacity-60" : "cursor-grab active:cursor-grabbing"
       )}
     >
-      <p className="text-sm font-medium">{task.title}</p>
+      <div className="flex items-start gap-1">
+        <p className="min-w-0 flex-1 text-sm font-medium">{task.title}</p>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="-mr-1 -mt-1 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label={`Przenieś zadanie: ${task.title}`}
+            disabled={pending}
+          >
+            <EllipsisVerticalIcon className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Przenieś do</DropdownMenuLabel>
+            {TASK_STATUSES.filter((s) => s !== task.status).map((s) => (
+              <DropdownMenuItem key={s} onClick={() => onMove(s)}>
+                {taskStatusConfig[s].label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       <div className="mt-2 flex items-center gap-2">
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
           {task.scopeLabel}
