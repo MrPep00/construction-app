@@ -109,6 +109,10 @@ export function PdfViewer({ src, filename, onClose }: Props) {
   } | null>(null)
   const tapStartRef = useRef<{ id: number; x: number; y: number } | null>(null)
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null)
+  /** Snapshot overlay: keeps the previous render visible across a same-page
+   *  scale commit until the new crisp render lands (flash-free zooming). */
+  const overlayRef = useRef<HTMLCanvasElement | null>(null)
+  const overlayTimerRef = useRef<number | null>(null)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -147,6 +151,77 @@ export function PdfViewer({ src, filename, onClose }: Props) {
   const clamps = computeClamps(pageDims, containerSize, rotation)
   const fitWidthScale = clamps.fitWidth
 
+  // ── Flash-free scale commits: snapshot overlay ────────────────────────────
+
+  const clearOverlay = useCallback(() => {
+    if (overlayTimerRef.current !== null) {
+      clearTimeout(overlayTimerRef.current)
+      overlayTimerRef.current = null
+    }
+    const snap = overlayRef.current
+    overlayRef.current = null
+    if (snap) {
+      snap.remove()
+      // Zero the backing store so iOS frees the bitmap immediately
+      snap.width = 0
+      snap.height = 0
+    }
+  }, [])
+
+  /** Copy the current render into an overlay CSS-sized to the TARGET
+   *  geometry (soft, like the gesture preview) so the commit re-render can
+   *  never show a blank frame. Removed on onRenderSuccess/-Error, with a
+   *  2s timeout fallback so it can never get stuck. */
+  const showSnapshotOverlay = useCallback((targetScale: number) => {
+    const wrap = pageWrapRef.current
+    const dims = pageDimsRef.current
+    if (!wrap || !dims) return
+    const r = rotatedDims(dims, rotationRef.current)
+    const cssW = r.w * targetScale
+    const cssH = r.h * targetScale
+
+    const armTimeout = () => {
+      if (overlayTimerRef.current !== null) clearTimeout(overlayTimerRef.current)
+      overlayTimerRef.current = window.setTimeout(clearOverlay, 2000)
+    }
+
+    // Rapid successive commits: the previous snapshot is still the freshest
+    // complete image (the live canvas may be mid-render) — just retarget it.
+    const existing = overlayRef.current
+    if (existing) {
+      existing.style.width = `${cssW}px`
+      existing.style.height = `${cssH}px`
+      armTimeout()
+      return
+    }
+
+    const src = wrap.querySelector<HTMLCanvasElement>("canvas:not([data-snapshot])")
+    if (!src || src.width === 0 || src.height === 0) return
+    const snap = document.createElement("canvas")
+    snap.dataset.snapshot = "true"
+    snap.width = src.width
+    snap.height = src.height
+    const ctx = snap.getContext("2d")
+    if (!ctx) return
+    ctx.drawImage(src, 0, 0)
+    Object.assign(snap.style, {
+      position: "absolute",
+      left: "0",
+      top: "0",
+      width: `${cssW}px`,
+      height: `${cssH}px`,
+      pointerEvents: "none",
+      zIndex: "10",
+    })
+    wrap.appendChild(snap)
+    overlayRef.current = snap
+    armTimeout()
+  }, [clearOverlay])
+
+  // Page navigation / rotation show the skeleton by design — drop any overlay.
+  useEffect(() => { clearOverlay() }, [pageNumber, rotation, clearOverlay])
+  useEffect(() => clearOverlay, [clearOverlay])
+
   /** Set a new scale, clamped, keeping the page point currently under
    *  (clientX, clientY) fixed at that client position. */
   const applyZoomAt = useCallback((nextRaw: number, clientX: number, clientY: number) => {
@@ -167,8 +242,9 @@ export function PdfViewer({ src, filename, onClose }: Props) {
         prevScale: prev,
       }
     }
+    showSnapshotOverlay(next)
     setScale(next)
-  }, [getClamps])
+  }, [getClamps, showSnapshotOverlay])
 
   /** Zoom keeping the container center fixed (buttons, keyboard, wheel). */
   const applyZoom = useCallback((nextRaw: number) => {
@@ -289,15 +365,26 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     const pinch = pinchRef.current
     pinchRef.current = null
     const wrap = pageWrapRef.current
+    if (!pinch) {
+      if (wrap) {
+        wrap.style.transform = ""
+        wrap.style.transformOrigin = ""
+        wrap.style.willChange = ""
+      }
+      return
+    }
+    const { min, max } = getClamps()
+    const next = Math.min(max, Math.max(min, pinch.startScale * pinch.lastK))
+    const changed = Math.abs(next - pinch.startScale) >= 1e-6
+    // Snapshot BEFORE clearing the preview transform — same task, one paint:
+    // the soft overlay replaces the equally-soft preview with no gap.
+    if (changed) showSnapshotOverlay(next)
     if (wrap) {
       wrap.style.transform = ""
       wrap.style.transformOrigin = ""
       wrap.style.willChange = ""
     }
-    if (!pinch) return
-    const { min, max } = getClamps()
-    const next = Math.min(max, Math.max(min, pinch.startScale * pinch.lastK))
-    if (Math.abs(next - pinch.startScale) < 1e-6) return
+    if (!changed) return
     // Anchor from gesture-start data — the live rect is transform-contaminated
     pendingAnchorRef.current = {
       clientX: pinch.anchorClientX,
@@ -307,7 +394,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
       prevScale: pinch.startScale,
     }
     setScale(next)
-  }, [getClamps])
+  }, [getClamps, showSnapshotOverlay])
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.pointerType !== "touch") return
@@ -590,7 +677,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
             </a>
           </div>
         ) : (
-          <div ref={pageWrapRef} className="min-w-fit">
+          <div ref={pageWrapRef} className="relative min-w-fit">
             <Document
               file={src}
               onLoadSuccess={handleLoadSuccess}
@@ -601,6 +688,8 @@ export function PdfViewer({ src, filename, onClose }: Props) {
                 pageNumber={pageNumber}
                 rotate={rotation}
                 onLoadSuccess={handlePageLoadSuccess}
+                onRenderSuccess={clearOverlay}
+                onRenderError={clearOverlay}
                 loading={skeleton}
                 // Until dims arrive, render at fit-width via width so the
                 // scale init (scale = fitWidthScale) causes no visual jump.
