@@ -32,6 +32,12 @@ const PIXEL_BUDGET = 16_000_000
 const ZOOM_STEP = 1.2
 /** Zoom floor relative to fit-width. */
 const MIN_SCALE_FACTOR = 0.25
+/** Double-tap: max delay between taps and max travel per/between taps (px). */
+const DOUBLE_TAP_MS = 300
+const TAP_SLOP = 10
+const DOUBLE_TAP_RADIUS = 25
+/** Double-tap zoom-in target relative to fit-page. */
+const DOUBLE_TAP_ZOOM = 2.5
 
 type PageDims = { w: number; h: number }
 type ContainerSize = { w: number; h: number }
@@ -73,13 +79,36 @@ export function PdfViewer({ src, filename, onClose }: Props) {
   const [loadError, setLoadError] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
+  const pageWrapRef = useRef<HTMLDivElement>(null)
   const numPagesRef = useRef<number | null>(null)
   const scaleRef = useRef<number | null>(null)
   const pageDimsRef = useRef<PageDims | null>(null)
   const containerSizeRef = useRef<ContainerSize | null>(null)
   const rotationRef = useRef(0)
-  /** Scroll anchor for zoom: keeps the container-center point fixed across a scale change. */
-  const pendingAnchorRef = useRef<{ cx: number; cy: number; prevScale: number } | null>(null)
+  /** Scroll anchor for zoom: keeps a chosen page point fixed at a chosen
+   *  client position across a committed scale change. content* are page-wrapper
+   *  coordinates at prevScale. */
+  const pendingAnchorRef = useRef<{
+    clientX: number
+    clientY: number
+    contentX: number
+    contentY: number
+    prevScale: number
+  } | null>(null)
+  /** Active touch pointers (client coords) on the scroll container. */
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  /** In-flight pinch. origin* = page-wrapper coords pinned at anchorClient*. */
+  const pinchRef = useRef<{
+    startDist: number
+    startScale: number
+    originX: number
+    originY: number
+    anchorClientX: number
+    anchorClientY: number
+    lastK: number
+  } | null>(null)
+  const tapStartRef = useRef<{ id: number; x: number; y: number } | null>(null)
+  const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -118,32 +147,48 @@ export function PdfViewer({ src, filename, onClose }: Props) {
   const clamps = computeClamps(pageDims, containerSize, rotation)
   const fitWidthScale = clamps.fitWidth
 
-  /** Set a new scale, clamped, keeping the container-center point fixed. */
-  const applyZoom = useCallback((nextRaw: number) => {
+  /** Set a new scale, clamped, keeping the page point currently under
+   *  (clientX, clientY) fixed at that client position. */
+  const applyZoomAt = useCallback((nextRaw: number, clientX: number, clientY: number) => {
     const { min, max } = getClamps()
     const next = Math.min(max, Math.max(min, nextRaw))
     const prev = scaleRef.current
     if (prev === null || Math.abs(next - prev) < 1e-6) return
-    const el = containerRef.current
-    if (el) {
+    const wrap = pageWrapRef.current
+    if (wrap) {
+      // Rect must be untransformed here — never call this mid-pinch-preview
+      // (the pinch commit path fills pendingAnchorRef from gesture-start data).
+      const rect = wrap.getBoundingClientRect()
       pendingAnchorRef.current = {
-        cx: el.scrollLeft + el.clientWidth / 2,
-        cy: el.scrollTop + el.clientHeight / 2,
+        clientX,
+        clientY,
+        contentX: clientX - rect.left,
+        contentY: clientY - rect.top,
         prevScale: prev,
       }
     }
     setScale(next)
   }, [getClamps])
 
+  /** Zoom keeping the container center fixed (buttons, keyboard, wheel). */
+  const applyZoom = useCallback((nextRaw: number) => {
+    const el = containerRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    applyZoomAt(nextRaw, rect.left + rect.width / 2, rect.top + rect.height / 2)
+  }, [applyZoomAt])
+
   // Re-anchor scroll after the scaled page box has laid out.
   useLayoutEffect(() => {
     const anchor = pendingAnchorRef.current
     const el = containerRef.current
-    if (!anchor || !el || scale === null) return
+    const wrap = pageWrapRef.current
+    if (!anchor || !el || !wrap || scale === null) return
     pendingAnchorRef.current = null
     const k = scale / anchor.prevScale
-    el.scrollLeft = anchor.cx * k - el.clientWidth / 2
-    el.scrollTop = anchor.cy * k - el.clientHeight / 2
+    const rect = wrap.getBoundingClientRect()
+    el.scrollLeft += rect.left + anchor.contentX * k - anchor.clientX
+    el.scrollTop += rect.top + anchor.contentY * k - anchor.clientY
   }, [scale])
 
   // Initialize to fit-width once page dims + container are known.
@@ -218,6 +263,147 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     el.addEventListener("wheel", handleWheel, { passive: false })
     return () => el.removeEventListener("wheel", handleWheel)
   }, [applyZoom])
+
+  // ── Touch gestures: pinch + double-tap ────────────────────────────────────
+  // Pointer events cannot cancel native scrolling, and with touch-action
+  // "pan-x pan-y" a two-finger move is also a valid pan. This non-passive
+  // touchmove listener suppresses native scroll ONLY while >= 2 pointers are
+  // down; one-finger scroll + momentum stay fully native. Known limitation:
+  // a scroll already in flight when the second finger lands may run out.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const block = (e: TouchEvent) => {
+      if (pointersRef.current.size >= 2) e.preventDefault()
+    }
+    el.addEventListener("touchmove", block, { passive: false })
+    return () => el.removeEventListener("touchmove", block)
+  }, [])
+
+  /** Commit the pinch preview: clear the CSS transform and re-render at the
+   *  committed scale, keeping the pinned page point under the fingers.
+   *  Fires on pointerup AND pointercancel — commit, not abort: the preview is
+   *  what the user sees, and snapping back on an OS-initiated cancel would
+   *  discard visible state; the clamp path makes commit always legal. */
+  const endPinch = useCallback(() => {
+    const pinch = pinchRef.current
+    pinchRef.current = null
+    const wrap = pageWrapRef.current
+    if (wrap) {
+      wrap.style.transform = ""
+      wrap.style.transformOrigin = ""
+      wrap.style.willChange = ""
+    }
+    if (!pinch) return
+    const { min, max } = getClamps()
+    const next = Math.min(max, Math.max(min, pinch.startScale * pinch.lastK))
+    if (Math.abs(next - pinch.startScale) < 1e-6) return
+    // Anchor from gesture-start data — the live rect is transform-contaminated
+    pendingAnchorRef.current = {
+      clientX: pinch.anchorClientX,
+      clientY: pinch.anchorClientY,
+      contentX: pinch.originX,
+      contentY: pinch.originY,
+      prevScale: pinch.startScale,
+    }
+    setScale(next)
+  }, [getClamps])
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.pointerType !== "touch") return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (pointersRef.current.size === 1) {
+      tapStartRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY }
+      return
+    }
+    // Second finger: this is a pinch, not a tap
+    tapStartRef.current = null
+    lastTapRef.current = null
+    if (pointersRef.current.size !== 2 || pinchRef.current) return
+    const wrap = pageWrapRef.current
+    const startScale = scaleRef.current
+    if (!wrap || startScale === null) return
+    const [a, b] = [...pointersRef.current.values()]
+    const startDist = Math.hypot(a.x - b.x, a.y - b.y)
+    if (startDist < 1) return
+    const cx = (a.x + b.x) / 2
+    const cy = (a.y + b.y) / 2
+    const rect = wrap.getBoundingClientRect()
+    pinchRef.current = {
+      startDist,
+      startScale,
+      originX: cx - rect.left,
+      originY: cy - rect.top,
+      anchorClientX: cx,
+      anchorClientY: cy,
+      lastK: 1,
+    }
+    wrap.style.transformOrigin = `${cx - rect.left}px ${cy - rect.top}px`
+    wrap.style.willChange = "transform"
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!pointersRef.current.has(e.pointerId)) return
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    const pinch = pinchRef.current
+    const wrap = pageWrapRef.current
+    if (!pinch || !wrap || pointersRef.current.size < 2) return
+    const [a, b] = [...pointersRef.current.values()]
+    const dist = Math.hypot(a.x - b.x, a.y - b.y)
+    if (dist < 1) return
+    // Clamp the preview to the committable range so gesture end never snaps
+    const { min, max } = getClamps()
+    const k = Math.min(
+      max / pinch.startScale,
+      Math.max(min / pinch.startScale, dist / pinch.startDist)
+    )
+    pinch.lastK = k
+    wrap.style.transform = `scale(${k})`
+  }
+
+  function handleTap(x: number, y: number) {
+    const now = Date.now()
+    const last = lastTapRef.current
+    if (
+      last &&
+      now - last.time < DOUBLE_TAP_MS &&
+      Math.hypot(x - last.x, y - last.y) < DOUBLE_TAP_RADIUS
+    ) {
+      lastTapRef.current = null
+      const { fitPage } = getClamps()
+      const current = scaleRef.current
+      if (fitPage === null || current === null) return
+      const atFitPage = Math.abs(current - fitPage) / fitPage < 0.02
+      // Zoom-in target still runs through the clamp path — budget max rules
+      applyZoomAt(atFitPage ? DOUBLE_TAP_ZOOM * fitPage : fitPage, x, y)
+    } else {
+      lastTapRef.current = { time: now, x, y }
+    }
+  }
+
+  function handlePointerEnd(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.pointerType !== "touch") return
+    pointersRef.current.delete(e.pointerId)
+
+    if (pinchRef.current) {
+      if (pointersRef.current.size < 2) endPinch()
+      return
+    }
+
+    // Tap detection (pointerup only — a cancelled pointer is not a tap)
+    const tapStart = tapStartRef.current
+    tapStartRef.current = null
+    if (
+      e.type === "pointerup" &&
+      tapStart &&
+      tapStart.id === e.pointerId &&
+      Math.hypot(e.clientX - tapStart.x, e.clientY - tapStart.y) < TAP_SLOP
+    ) {
+      handleTap(e.clientX, e.clientY)
+    }
+  }
 
   // ── Document callbacks ────────────────────────────────────────────────────
 
@@ -382,7 +568,13 @@ export function PdfViewer({ src, filename, onClose }: Props) {
       <div
         ref={containerRef}
         className="flex flex-1 items-start justify-center overflow-auto overscroll-contain p-4"
-        style={{ touchAction: "pinch-zoom pan-x pan-y" }}
+        // pan-x pan-y: one-finger scroll + momentum stay native; pinch is ours
+        // (two-finger native scroll is suppressed by the touchmove blocker)
+        style={{ touchAction: "pan-x pan-y" }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
       >
         {loadError ? (
           <div className="flex flex-col items-center gap-3 pt-16 text-center">
@@ -398,7 +590,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
             </a>
           </div>
         ) : (
-          <div className="min-w-fit">
+          <div ref={pageWrapRef} className="min-w-fit">
             <Document
               file={src}
               onLoadSuccess={handleLoadSuccess}
