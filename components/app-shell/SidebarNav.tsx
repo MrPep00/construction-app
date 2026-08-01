@@ -35,7 +35,7 @@ export function SidebarNav({ projectId, openIssueCount, collapsed }: Props) {
     { label: "Pulpit", href: base, icon: LayoutDashboardIcon },
     { label: "Usterki", href: `${base}/issues`, icon: CircleAlertIcon, badge: openIssueCount },
     { label: "Zadania", href: `${base}/tasks`, icon: ClipboardListIcon },
-    { label: "Pliki", icon: FolderIcon, disabled: true },
+    { label: "Pliki", href: `${base}/files`, icon: FolderIcon },
     { label: "Notatki", href: `${base}/notes`, icon: StickyNoteIcon },
     { label: "Inwentarz", href: `${base}/inventory`, icon: PackageIcon },
   ]

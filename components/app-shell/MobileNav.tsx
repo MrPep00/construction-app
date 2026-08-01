@@ -32,7 +32,7 @@ export function MobileNav({ projectId, openIssueCount }: Props) {
     { label: "Budynek", href: base, icon: Building2Icon },
     { label: "Usterki", href: `${base}/issues`, icon: CircleAlertIcon, badge: openIssueCount },
     { label: "Zadania", href: `${base}/tasks`, icon: ClipboardListIcon },
-    { label: "Pliki", icon: FolderIcon, disabled: true },
+    { label: "Pliki", href: `${base}/files`, icon: FolderIcon },
   ]
 
   return (
