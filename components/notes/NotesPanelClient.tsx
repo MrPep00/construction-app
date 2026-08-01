@@ -16,6 +16,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export type NoteRow = {
   id: string
@@ -28,13 +35,14 @@ export type NoteRow = {
 }
 
 type Author = { email: string; initials: string }
+type FloorOption = { id: string; level: number }
 
 interface Props {
   notes: NoteRow[]
   projectId: string
   floorId?: string | null
-  /** Floors carrying notes, for filter chips; empty in floor-scoped mode */
-  floorLevels: number[]
+  /** Floors carrying notes, for filter chips + composer scope; empty in floor-scoped mode */
+  floorOptions: FloorOption[]
   currentAuthor: Author | null
 }
 
@@ -176,7 +184,7 @@ export function NotesPanelClient({
   notes,
   projectId,
   floorId,
-  floorLevels,
+  floorOptions,
   currentAuthor,
 }: Props) {
   const router = useRouter()
@@ -198,8 +206,16 @@ export function NotesPanelClient({
   const unified = !floorId
   const [filter, setFilter] = useState<string>(() => searchParams.get("filter") ?? "all")
 
+  // Composer scope: "global" or a floor id; inherits the active floor chip
+  function scopeForFilter(filterValue: string): string {
+    if (filterValue === "all" || filterValue === "global") return "global"
+    return floorOptions.find((f) => String(f.level) === filterValue)?.id ?? "global"
+  }
+  const [scope, setScope] = useState<string>(() => scopeForFilter(filter))
+
   function updateFilter(value: string) {
     setFilter(value)
+    setScope(scopeForFilter(value))
     const params = new URLSearchParams(searchParams)
     if (value === "all") params.delete("filter")
     else params.set("filter", value)
@@ -218,6 +234,10 @@ export function NotesPanelClient({
     const content = newContent.trim()
     if (!content) return
     setNewContent("")
+    const scopedFloor = unified
+      ? (floorOptions.find((f) => f.id === scope) ?? null)
+      : null
+    const targetFloorId = floorId ?? scopedFloor?.id ?? null
     startTransition(async () => {
       const now = new Date().toISOString()
       applyOptimistic({
@@ -227,12 +247,12 @@ export function NotesPanelClient({
           body: content,
           created_at: now,
           updated_at: now,
-          floor_level: null, // composer creates a global note on the unified page
+          floor_level: scopedFloor?.level ?? null,
           author_email: currentAuthor?.email ?? null,
           author_initials: currentAuthor?.initials ?? null,
         },
       })
-      const result = await createNote({ projectId, floorId, content })
+      const result = await createNote({ projectId, floorId: targetFloorId, content })
       if (result.error) {
         toast.error(result.error)
         setNewContent(content)
@@ -261,9 +281,9 @@ export function NotesPanelClient({
   const chips: { value: string; label: string }[] = [
     { value: "all", label: "Wszystkie" },
     { value: "global", label: "Globalne" },
-    ...floorLevels.map((level) => ({
-      value: String(level),
-      label: shortFloorLabel(level),
+    ...floorOptions.map((f) => ({
+      value: String(f.level),
+      label: shortFloorLabel(f.level),
     })),
   ]
 
@@ -320,7 +340,26 @@ export function NotesPanelClient({
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleCreate()
             }}
           />
-          <div className="flex justify-end gap-1">
+          <div className="flex items-center justify-end gap-2">
+            {unified && (
+              <Select value={scope} onValueChange={(v) => setScope(v ?? "global")}>
+                <SelectTrigger
+                  size="sm"
+                  className="w-auto min-w-28"
+                  aria-label="Zakres notatki"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">Globalna</SelectItem>
+                  {floorOptions.map((f) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {shortFloorLabel(f.level)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {/* TODO(D-029): mic button lands here (voice notes) */}
             <Button
               size="sm"

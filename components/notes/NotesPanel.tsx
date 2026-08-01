@@ -63,12 +63,16 @@ export async function NotesPanel({ projectId, floorId }: Props) {
     }
   })
 
-  // Filter chips only for floors that actually carry notes, top floor first
-  const floorLevels = floorId
+  // Chips + composer scope options: only floors that actually carry notes, top floor first
+  const floorIdsWithNotes = new Set(
+    (notesData ?? []).map((n) => n.floor_id).filter((id): id is string => id !== null)
+  )
+  const floorOptions = floorId
     ? []
-    : [...new Set(notes.map((n) => n.floor_level).filter((l): l is number => l !== null))].sort(
-        (a, b) => b - a
-      )
+    : (floorsData ?? [])
+        .filter((f) => floorIdsWithNotes.has(f.id))
+        .map((f) => ({ id: f.id, level: f.level }))
+        .sort((a, b) => b.level - a.level)
 
   const currentEmail = user?.email ?? null
 
@@ -77,7 +81,7 @@ export async function NotesPanel({ projectId, floorId }: Props) {
       notes={notes}
       projectId={projectId}
       floorId={floorId}
-      floorLevels={floorLevels}
+      floorOptions={floorOptions}
       currentAuthor={
         currentEmail
           ? { email: currentEmail, initials: initialsFromEmail(currentEmail) }
