@@ -34,12 +34,17 @@ function pluralize(n: number): string {
   return "plików"
 }
 
-type BaseProps = { defaultOpen?: boolean; onDone?: () => void }
+type BaseProps = {
+  defaultOpen?: boolean
+  onDone?: () => void
+  /** Upload category ('documentation' | 'drawing' | 'protocol'); server defaults to 'documentation'. */
+  category?: string
+}
 type Props =
   | (BaseProps & { locationId: string; floorId?: never })
   | (BaseProps & { floorId: string; locationId?: never })
 
-export function FileUploader({ locationId, floorId, defaultOpen = false, onDone }: Props) {
+export function FileUploader({ locationId, floorId, category, defaultOpen = false, onDone }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(defaultOpen)
   const [items, setItems] = useState<UploadItem[]>([])
@@ -122,8 +127,8 @@ export function FileUploader({ locationId, floorId, defaultOpen = false, onDone 
         }
 
         const finalResult = floorId
-          ? await finalizeFileUploadForFloor(floorId, path, item.file.name, mimeType, item.file.size)
-          : await finalizeFileUpload(locationId!, path, item.file.name, mimeType, item.file.size)
+          ? await finalizeFileUploadForFloor(floorId, path, item.file.name, mimeType, item.file.size, category)
+          : await finalizeFileUpload(locationId!, path, item.file.name, mimeType, item.file.size, category)
 
         setItems((prev) =>
           prev.map((i) =>

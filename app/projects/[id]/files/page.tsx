@@ -11,6 +11,7 @@ import {
   ProjectFilesClient,
   type ProjectFileRow,
 } from "@/components/files/ProjectFilesClient"
+import { FilesUploadPanel } from "@/components/files/FilesUploadPanel"
 
 type FileRecord = {
   id: string
@@ -137,9 +138,15 @@ export default async function ProjectFilesPage({
     }
   })
 
+  const apartments = locations
+    .filter((l) => l.type === "apartment")
+    .sort((a, b) => a.name.localeCompare(b.name, "pl", { numeric: true }))
+    .map((l) => ({ id: l.id, name: l.name, floorId: l.floor_id }))
+
   return (
     <main className="px-4 py-6 md:px-6 lg:px-10">
       <h1 className="mb-6 text-2xl font-bold">Pliki</h1>
+      <FilesUploadPanel floors={floors} apartments={apartments} />
       <ProjectFilesClient
         rows={rows}
         counts={counts}

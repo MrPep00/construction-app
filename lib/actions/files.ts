@@ -5,6 +5,7 @@ import { randomUUID } from "crypto"
 import { createClient } from "@/lib/supabase/server"
 import { logError } from "@/lib/logging/log-error"
 import { getR2PresignedPutUrl, uploadToR2, deleteFromR2, isR2Configured } from "@/lib/storage/r2"
+import { isUploadCategory } from "@/lib/files/categories"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
 
@@ -150,6 +151,7 @@ export async function finalizeFileUpload(
   filename: string,
   mimeType: string,
   sizeBytes: number,
+  category?: string,
 ) {
   try {
     const supabase = await createClient()
@@ -166,6 +168,8 @@ export async function finalizeFileUpload(
         size_bytes: sizeBytes,
         uploaded_by: user.id,
         storage_provider: "r2",
+        // Invalid/absent category falls back to DB default 'documentation'
+        ...(isUploadCategory(category) ? { category } : {}),
       })
       .select()
       .single()
@@ -191,6 +195,7 @@ export async function finalizeFileUploadForFloor(
   filename: string,
   mimeType: string,
   sizeBytes: number,
+  category?: string,
 ) {
   try {
     const supabase = await createClient()
@@ -207,6 +212,8 @@ export async function finalizeFileUploadForFloor(
         size_bytes: sizeBytes,
         uploaded_by: user.id,
         storage_provider: "r2",
+        // Invalid/absent category falls back to DB default 'documentation'
+        ...(isUploadCategory(category) ? { category } : {}),
       })
       .select()
       .single()
@@ -312,6 +319,7 @@ export async function uploadIssuePhoto(formData: FormData) {
       .insert({
         location_id: locationId,
         issue_id: issueId,
+        category: "issue_photo",
         name: file.name,
         storage_path: storagePath,
         mime_type: mimeType,
@@ -362,6 +370,7 @@ export async function uploadFileForTask(formData: FormData) {
       .from("files")
       .insert({
         task_id: taskId,
+        category: "task_file",
         name: file.name,
         storage_path: storagePath,
         mime_type: mimeType,

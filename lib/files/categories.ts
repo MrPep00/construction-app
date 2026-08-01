@@ -22,10 +22,12 @@ export function isVisibleCategory(value: string | undefined | null): value is Vi
   return VISIBLE_CATEGORIES.includes(value as VisibleCategory)
 }
 
-/** Default category for a fresh upload from the Pliki tab. */
-export function inferCategoryFromMime(mimeType: string, name: string): FileCategory {
-  const ext = name.split(".").pop()?.toLowerCase() ?? ""
-  if (ext === "dwg" || ext === "dxf") return "drawing"
-  if (mimeType.startsWith("image/")) return "documentation"
-  return "documentation"
+/** Categories a user can pick when uploading from the Pliki tab.
+ *  'issue_photo' and 'task_file' are assigned by their flows, never picked. */
+export const UPLOAD_CATEGORIES = ["documentation", "drawing", "protocol"] as const satisfies readonly FileCategory[]
+
+export type UploadCategory = (typeof UPLOAD_CATEGORIES)[number]
+
+export function isUploadCategory(value: string | undefined | null): value is UploadCategory {
+  return UPLOAD_CATEGORIES.includes(value as UploadCategory)
 }
