@@ -1,9 +1,12 @@
 "use client"
 
-import { useState, useTransition, useRef } from "react"
+import { useOptimistic, useState, useTransition, useRef } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Trash2Icon, CheckIcon, XIcon, PencilIcon } from "lucide-react"
 import { toast } from "sonner"
 import { createNote, updateNote, deleteNote } from "@/lib/actions/notes"
+import { shortFloorLabel } from "@/lib/locations"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -19,13 +22,23 @@ export type NoteRow = {
   body: string
   created_at: string
   updated_at: string
+  floor_level: number | null
+  author_email: string | null
+  author_initials: string | null
 }
+
+type Author = { email: string; initials: string }
 
 interface Props {
   notes: NoteRow[]
   projectId: string
   floorId?: string | null
+  /** Floors carrying notes, for filter chips; empty in floor-scoped mode */
+  floorLevels: number[]
+  currentAuthor: Author | null
 }
+
+type NoteAction = { type: "add"; note: NoteRow } | { type: "remove"; id: string }
 
 function formatDateTime(dateStr: string) {
   return new Date(dateStr).toLocaleString("pl-PL", {
@@ -39,9 +52,11 @@ function formatDateTime(dateStr: string) {
 
 function NoteCard({
   note,
+  showScope,
   onDelete,
 }: {
   note: NoteRow
+  showScope: boolean
   onDelete: (note: NoteRow) => void
 }) {
   const [editing, setEditing] = useState(false)
@@ -76,13 +91,33 @@ function NoteCard({
   }
 
   return (
-    <div className="rounded-lg border bg-card px-4 py-3">
+    <div className="rounded-xl border bg-card px-4 py-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <time className="text-xs text-muted-foreground">
-          {formatDateTime(note.updated_at !== note.created_at ? note.updated_at : note.created_at)}
-          {note.updated_at !== note.created_at && " (edytowana)"}
-        </time>
-        <div className="flex items-center gap-0.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[10px] font-semibold text-brand"
+            title={note.author_email ?? undefined}
+          >
+            {note.author_initials ?? "?"}
+          </span>
+          <div className="min-w-0">
+            {note.author_email && (
+              <p className="truncate text-xs font-medium">{note.author_email}</p>
+            )}
+            <time className="block text-xs text-muted-foreground">
+              {formatDateTime(
+                note.updated_at !== note.created_at ? note.updated_at : note.created_at
+              )}
+              {note.updated_at !== note.created_at && " (edytowana)"}
+            </time>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {showScope && (
+            <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+              {note.floor_level === null ? "Globalna" : shortFloorLabel(note.floor_level)}
+            </span>
+          )}
           {!editing && (
             <Button variant="ghost" size="icon-sm" onClick={startEdit} aria-label="Edytuj">
               <PencilIcon className="size-3.5" />
@@ -132,48 +167,150 @@ function NoteCard({
           {note.body}
         </p>
       )}
+      {/* TODO: optional note photo — needs files.note_id target (migration), deferred from P7 */}
     </div>
   )
 }
 
-export function NotesPanelClient({ notes: initialNotes, projectId, floorId }: Props) {
+export function NotesPanelClient({
+  notes,
+  projectId,
+  floorId,
+  floorLevels,
+  currentAuthor,
+}: Props) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
   const [newContent, setNewContent] = useState("")
   const [isPending, startTransition] = useTransition()
   const [deleteTarget, setDeleteTarget] = useState<NoteRow | null>(null)
 
+  const [optimisticNotes, applyOptimistic] = useOptimistic(
+    notes,
+    (state: NoteRow[], action: NoteAction) =>
+      action.type === "add"
+        ? [action.note, ...state]
+        : state.filter((n) => n.id !== action.id)
+  )
+
+  const unified = !floorId
+  const [filter, setFilter] = useState<string>(() => searchParams.get("filter") ?? "all")
+
+  function updateFilter(value: string) {
+    setFilter(value)
+    const params = new URLSearchParams(searchParams)
+    if (value === "all") params.delete("filter")
+    else params.set("filter", value)
+    router.replace(params.size > 0 ? `${pathname}?${params}` : pathname, {
+      scroll: false,
+    })
+  }
+
+  const visibleNotes = optimisticNotes.filter((n) => {
+    if (!unified || filter === "all") return true
+    if (filter === "global") return n.floor_level === null
+    return String(n.floor_level) === filter
+  })
+
   function handleCreate() {
-    if (!newContent.trim()) return
+    const content = newContent.trim()
+    if (!content) return
+    setNewContent("")
     startTransition(async () => {
-      const result = await createNote({
-        projectId,
-        floorId,
-        content: newContent.trim(),
+      const now = new Date().toISOString()
+      applyOptimistic({
+        type: "add",
+        note: {
+          id: `temp-${crypto.randomUUID()}`,
+          body: content,
+          created_at: now,
+          updated_at: now,
+          floor_level: null, // composer creates a global note on the unified page
+          author_email: currentAuthor?.email ?? null,
+          author_initials: currentAuthor?.initials ?? null,
+        },
       })
+      const result = await createNote({ projectId, floorId, content })
       if (result.error) {
         toast.error(result.error)
+        setNewContent(content)
       } else {
-        setNewContent("")
+        router.refresh()
       }
     })
   }
 
   function handleDeleteConfirm() {
     if (!deleteTarget) return
+    const target = deleteTarget
+    setDeleteTarget(null)
     startTransition(async () => {
-      const result = await deleteNote(deleteTarget.id)
+      applyOptimistic({ type: "remove", id: target.id })
+      const result = await deleteNote(target.id)
       if (result.error) {
         toast.error(result.error)
       } else {
         toast.success("Notatka usunięta")
-        setDeleteTarget(null)
+        router.refresh()
       }
     })
   }
 
+  const chips: { value: string; label: string }[] = [
+    { value: "all", label: "Wszystkie" },
+    { value: "global", label: "Globalne" },
+    ...floorLevels.map((level) => ({
+      value: String(level),
+      label: shortFloorLabel(level),
+    })),
+  ]
+
   return (
     <>
       <div className="space-y-4">
-        <div className="space-y-2">
+        {unified && (
+          <div
+            className="flex items-center gap-1.5 overflow-x-auto pb-1"
+            role="group"
+            aria-label="Filtr notatek"
+          >
+            {chips.map((chip) => (
+              <button
+                key={chip.value}
+                type="button"
+                onClick={() => updateFilter(chip.value)}
+                className={cn(
+                  "min-h-9 shrink-0 rounded-full border px-3.5 text-sm font-medium transition-colors",
+                  filter === chip.value
+                    ? "border-brand bg-brand-soft text-brand"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {visibleNotes.length === 0 && (
+          <p className="text-sm text-muted-foreground">Brak notatek.</p>
+        )}
+
+        <div className="space-y-3">
+          {visibleNotes.map((note) => (
+            <NoteCard
+              key={note.id}
+              note={note}
+              showScope={unified}
+              onDelete={setDeleteTarget}
+            />
+          ))}
+        </div>
+
+        {/* Composer pinned above the mobile bottom nav (3.5rem + safe area); free-standing on desktop */}
+        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 space-y-2 rounded-xl border bg-card p-3 shadow-sm lg:bottom-4">
           <Textarea
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
@@ -183,7 +320,8 @@ export function NotesPanelClient({ notes: initialNotes, projectId, floorId }: Pr
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleCreate()
             }}
           />
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-1">
+            {/* TODO(D-029): mic button lands here (voice notes) */}
             <Button
               size="sm"
               onClick={handleCreate}
@@ -192,16 +330,6 @@ export function NotesPanelClient({ notes: initialNotes, projectId, floorId }: Pr
               {isPending ? "Dodawanie..." : "Dodaj notatkę"}
             </Button>
           </div>
-        </div>
-
-        {initialNotes.length === 0 && (
-          <p className="text-sm text-muted-foreground">Brak notatek.</p>
-        )}
-
-        <div className="space-y-3">
-          {initialNotes.map((note) => (
-            <NoteCard key={note.id} note={note} onDelete={setDeleteTarget} />
-          ))}
         </div>
       </div>
 

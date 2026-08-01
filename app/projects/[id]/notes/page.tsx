@@ -30,12 +30,10 @@ export default async function GlobalNotesPage({
           {project.name}
         </Link>
         <span>/</span>
-        <span className="text-foreground">Notatki globalne</span>
+        <span className="text-foreground">Notatki</span>
       </nav>
 
-      <h1 className="mb-6 text-2xl font-bold">
-        Notatki globalne — {project.name}
-      </h1>
+      <h1 className="mb-6 text-2xl font-bold">Notatki</h1>
 
       <NotesPanel projectId={id} />
     </main>
