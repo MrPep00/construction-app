@@ -11,4 +11,5 @@ export type Json =
 export type IssueStatus = "open" | "resolved"
 export type LocationType = "branch" | "tenant_changes" | "apartment" | "room" | "folder"
 export type TaskStatus = "todo" | "doing" | "done"
+export type FileCategory = "drawing" | "protocol" | "documentation" | "issue_photo" | "task_file"
 export type MovementReason = "delivery" | "consumption" | "correction"
