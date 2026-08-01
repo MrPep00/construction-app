@@ -43,9 +43,8 @@ type DialogState =
 
 function cellColor(cell: LevelCell | undefined) {
   if (!cell || cell.required === 0) return "text-muted-foreground"
-  if (cell.on_hand >= cell.required) return "text-green-600 dark:text-green-400"
-  if (cell.on_hand === 0) return "text-red-500"
-  return "text-yellow-600 dark:text-yellow-400"
+  if (cell.on_hand >= cell.required) return "text-status-resolved"
+  return "font-semibold text-destructive"
 }
 
 function palStr(qty: number, palletQty: number): string {
@@ -224,7 +223,7 @@ export function FloorInventoryPanelClient({
                   <span
                     className={cn(
                       "font-mono text-sm font-medium tabular-nums",
-                      m.delta > 0 ? "text-green-600" : "text-red-500"
+                      m.delta > 0 ? "text-status-resolved" : "text-destructive"
                     )}
                   >
                     {m.delta > 0 ? "+" : ""}

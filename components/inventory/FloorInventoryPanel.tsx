@@ -22,7 +22,7 @@ export async function FloorInventoryPanel({ projectId, floorId }: Props) {
   const [{ data: itemsData }, { data: floorsData }] = await Promise.all([
     supabase
       .from("inventory_items")
-      .select("id, name, unit")
+      .select("id, name, unit, pallet_qty")
       .eq("project_id", projectId)
       .order("created_at", { ascending: true }),
     supabase

@@ -189,7 +189,7 @@ export function MovementForm({
               <span
                 className={cn(
                   "w-4 shrink-0 text-sm font-bold",
-                  isNegative ? "text-red-500" : "text-green-600"
+                  isNegative ? "text-destructive" : "text-status-resolved"
                 )}
               >
                 {isNegative ? "−" : "+"}

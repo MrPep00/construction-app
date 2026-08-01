@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { InventoryFloorList } from "@/components/inventory/InventoryFloorList"
+import { InventoryItemTable } from "@/components/inventory/InventoryItemTable"
 import { InventoryPageControls } from "@/components/inventory/InventoryPageControls"
 import { FirstItemPrompt } from "@/components/inventory/FirstItemPrompt"
 
@@ -29,7 +29,7 @@ export default async function InventoryPage({
       .order("level", { ascending: true }),
     supabase
       .from("inventory_items")
-      .select("id, name, unit")
+      .select("id, name, unit, pallet_qty")
       .eq("project_id", id),
   ])
 
@@ -61,7 +61,7 @@ export default async function InventoryPage({
         </div>
       )}
 
-      <InventoryFloorList projectId={id} />
+      <InventoryItemTable projectId={id} />
     </main>
   )
 }
