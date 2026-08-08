@@ -126,47 +126,21 @@ export function PdfViewer({ src, filename, onClose }: Props) {
   useEffect(() => { pageDimsRef.current = pageDims }, [pageDims])
   useEffect(() => { rotationRef.current = rotation }, [rotation])
 
-  // ── TEMP DEBUG INSTRUMENTATION (Phase 1) — remove in fix commit ───────────
-  const debugDump = useCallback((tag: string, extra: Record<string, unknown> = {}) => {
-    const el = containerRef.current
-    const c = computeClamps(pageDimsRef.current, containerSizeRef.current, rotationRef.current)
-    console.table({
-      tag,
-      containerW: containerSizeRef.current?.w ?? null,
-      containerH: containerSizeRef.current?.h ?? null,
-      rawClientW: el ? el.clientWidth : "el=NULL",
-      rawClientH: el ? el.clientHeight : "el=NULL",
-      pageW: pageDimsRef.current?.w ?? null,
-      pageH: pageDimsRef.current?.h ?? null,
-      rotation: rotationRef.current,
-      fitWidthScale: c.fitWidth,
-      fitPageScale: c.fitPage,
-      min: c.min,
-      max: c.max,
-      scale: scaleRef.current,
-      ...extra,
-    })
-  }, [])
-  // ── end TEMP DEBUG ─────────────────────────────────────────────────────────
-
+  // The portal renders only after `mounted` flips — on the first effect pass
+  // containerRef is still null, so this must re-run on `mounted` to attach.
   useEffect(() => {
     const el = containerRef.current
-    if (!el) {
-      // TEMP DEBUG (Phase 1)
-      console.warn("[PdfViewer DEBUG] observer effect ran with containerRef=NULL — ResizeObserver never attached")
-      return
-    }
+    if (!el) return
     const update = () => {
       const size = { w: el.clientWidth - 32, h: el.clientHeight - 32 }
       containerSizeRef.current = size
       setContainerSize(size)
-      debugDump("resize-update") // TEMP DEBUG (Phase 1)
     }
     update()
     const ro = new ResizeObserver(update)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [debugDump])
+  }, [mounted])
 
   // ── Scale system ──────────────────────────────────────────────────────────
   // All fits and clamps derive from the rotated page box at scale 1.
@@ -256,7 +230,6 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     const { min, max } = getClamps()
     const next = Math.min(max, Math.max(min, nextRaw))
     const prev = scaleRef.current
-    debugDump("applyZoomAt", { nextRaw, clamped: next, prev, bailing: prev === null || Math.abs(next - (prev ?? 0)) < 1e-6 }) // TEMP DEBUG (Phase 1)
     if (prev === null || Math.abs(next - prev) < 1e-6) return
     const wrap = pageWrapRef.current
     if (wrap) {
@@ -273,7 +246,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     }
     showSnapshotOverlay(next)
     setScale(next)
-  }, [getClamps, showSnapshotOverlay, debugDump])
+  }, [getClamps, showSnapshotOverlay])
 
   /** Zoom keeping the container center fixed (buttons, keyboard, wheel). */
   const applyZoom = useCallback((nextRaw: number) => {
@@ -296,18 +269,10 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     el.scrollTop += rect.top + anchor.contentY * k - anchor.clientY
   }, [scale])
 
-  // TEMP DEBUG (Phase 1): log every recompute of the scale system inputs.
-  useEffect(() => {
-    debugDump("recompute")
-  }, [pageDims, containerSize, rotation, scale, debugDump])
-
   // Initialize to fit-width once page dims + container are known.
   useEffect(() => {
-    if (scale === null && fitWidthScale !== null) {
-      debugDump("scale-init", { initTo: fitWidthScale }) // TEMP DEBUG (Phase 1)
-      setScale(fitWidthScale)
-    }
-  }, [scale, fitWidthScale, debugDump])
+    if (scale === null && fitWidthScale !== null) setScale(fitWidthScale)
+  }, [scale, fitWidthScale])
 
   // Rotation or resize can shrink the budget-derived max — keep scale legal.
   useEffect(() => {
@@ -327,26 +292,22 @@ export function PdfViewer({ src, filename, onClose }: Props) {
   }, [])
 
   const zoomIn = useCallback(() => {
-    debugDump("btn-zoom-in") // TEMP DEBUG (Phase 1)
     if (scaleRef.current !== null) applyZoom(scaleRef.current * ZOOM_STEP)
-  }, [applyZoom, debugDump])
+  }, [applyZoom])
 
   const zoomOut = useCallback(() => {
-    debugDump("btn-zoom-out") // TEMP DEBUG (Phase 1)
     if (scaleRef.current !== null) applyZoom(scaleRef.current / ZOOM_STEP)
-  }, [applyZoom, debugDump])
+  }, [applyZoom])
 
   const fitWidth = useCallback(() => {
-    debugDump("btn-fit-width") // TEMP DEBUG (Phase 1)
     const { fitWidth } = getClamps()
     if (fitWidth !== null) applyZoom(fitWidth)
-  }, [applyZoom, getClamps, debugDump])
+  }, [applyZoom, getClamps])
 
   const fitPage = useCallback(() => {
-    debugDump("btn-fit-page") // TEMP DEBUG (Phase 1)
     const { fitPage } = getClamps()
     if (fitPage !== null) applyZoom(fitPage)
-  }, [applyZoom, getClamps, debugDump])
+  }, [applyZoom, getClamps])
 
   const rotate = useCallback(() => {
     setRotation((r) => (r + 90) % 360)
@@ -545,7 +506,6 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     const dims = { w: page.originalWidth, h: page.originalHeight }
     pageDimsRef.current = dims
     setPageDims(dims)
-    debugDump("page-load-success") // TEMP DEBUG (Phase 1)
   }
 
   // Cap the render DPR so canvas pixels stay inside the budget on any device.
