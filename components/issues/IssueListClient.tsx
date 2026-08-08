@@ -144,15 +144,24 @@ interface Props {
 
 export function IssueListClient({ issues: initialIssues, locationId }: Props) {
   const router = useRouter()
-  const [optimisticIssues, setOptimisticIssues] = useState(initialIssues)
+  // Optimistic status per issue id, applied over the server-provided props.
+  // Deriving at render (instead of copying props to state) keeps the list in
+  // sync with parent updates — optimistic creates, router.refresh.
+  const [statusOverrides, setStatusOverrides] = useState<Map<string, IssueStatus>>(
+    () => new Map()
+  )
   const [dialog, setDialog] = useState<DialogState>(null)
   const [expandedSections, setExpandedSections] = useState<Set<IssueStatus>>(
     () => new Set<IssueStatus>(["open"])
   )
   const [, startTransition] = useTransition()
 
-  // Sync when server re-renders with new data
-  useState(() => { setOptimisticIssues(initialIssues) })
+  const optimisticIssues = initialIssues.map((issue) => {
+    const override = statusOverrides.get(issue.id)
+    return override && override !== issue.status
+      ? { ...issue, status: override }
+      : issue
+  })
 
   function toggleSection(status: IssueStatus) {
     setExpandedSections((prev) => {
@@ -164,7 +173,7 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
   }
 
   function handleStatusChange(issue: IssueRow, newStatus: IssueStatus) {
-    setOptimisticIssues((prev) => prev.map((i) => i.id === issue.id ? { ...i, status: newStatus } : i))
+    setStatusOverrides((prev) => new Map(prev).set(issue.id, newStatus))
     startTransition(async () => {
       const result =
         newStatus === "resolved"
@@ -172,7 +181,12 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
           : await reopenIssue(issue.id)
       if (result.error) {
         toast.error(result.error)
-        setOptimisticIssues(initialIssues)
+        // Rollback: drop the override, server truth (props) wins again
+        setStatusOverrides((prev) => {
+          const copy = new Map(prev)
+          copy.delete(issue.id)
+          return copy
+        })
       } else {
         router.refresh()
       }

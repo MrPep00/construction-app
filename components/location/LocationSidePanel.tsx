@@ -29,6 +29,13 @@ interface Props {
 export function LocationSidePanel({ issues, tasks, locationId, projectId, floorId }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("usterki")
   const [createDialog, setCreateDialog] = useState<"issue" | "task" | null>(null)
+  // Optimistically created issues not yet present in server data; rows are
+  // dropped at render time once router.refresh() delivers them via props.
+  const [extraIssues, setExtraIssues] = useState<IssueRow[]>([])
+  const mergedIssues = [
+    ...extraIssues.filter((e) => !issues.some((i) => i.id === e.id)),
+    ...issues,
+  ]
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -86,7 +93,7 @@ export function LocationSidePanel({ issues, tasks, locationId, projectId, floorI
 
         <div className="p-4">
           {activeTab === "usterki" && (
-            <IssueListClient issues={issues} locationId={locationId} />
+            <IssueListClient issues={mergedIssues} locationId={locationId} />
           )}
           {activeTab === "zadania" && (
             <TaskListClient
@@ -103,6 +110,15 @@ export function LocationSidePanel({ issues, tasks, locationId, projectId, floorI
         <IssueForm
           mode="create"
           locationId={locationId}
+          onOptimisticAdd={(issue) => setExtraIssues((prev) => [issue, ...prev])}
+          onOptimisticReplace={(tempId, issue) =>
+            setExtraIssues((prev) =>
+              prev.map((i) => (i.id === tempId ? issue : i))
+            )
+          }
+          onOptimisticRemove={(tempId) =>
+            setExtraIssues((prev) => prev.filter((i) => i.id !== tempId))
+          }
           onClose={() => setCreateDialog(null)}
         />
       )}

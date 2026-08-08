@@ -33,6 +33,11 @@ type CreateMode = {
   locationId?: string
   floors?: IssueFloorOption[]
   apartments?: IssueApartmentOption[]
+  /** Optimistic-create hooks: add a temp row before the server call, swap in the
+   *  real id on success, remove on failure (P4 pattern extended to create). */
+  onOptimisticAdd?: (issue: IssueRow) => void
+  onOptimisticReplace?: (tempId: string, issue: IssueRow) => void
+  onOptimisticRemove?: (tempId: string) => void
 }
 type EditMode = { mode: "edit"; issue: IssueRow; locationId: string }
 
@@ -71,15 +76,37 @@ export function IssueForm(props: Props) {
     setError(null)
     startTransition(async () => {
       if (props.mode === "create") {
+        const tempId = `temp-${crypto.randomUUID()}`
+        props.onOptimisticAdd?.({
+          id: tempId,
+          title: title.trim(),
+          description: description || null,
+          contractor: contractor || null,
+          status: "open",
+          created_at: new Date().toISOString(),
+        })
+
         const result = await createIssue({
           locationId: effectiveLocationId,
           title,
           description: description || undefined,
           contractor: contractor || undefined,
         })
-        if (result.error) { setError(result.error); return }
+        if (result.error) {
+          props.onOptimisticRemove?.(tempId)
+          setError(result.error)
+          return
+        }
 
         const issueId = result.data!.id
+        props.onOptimisticReplace?.(tempId, {
+          id: issueId,
+          title: title.trim(),
+          description: description || null,
+          contractor: contractor || null,
+          status: "open",
+          created_at: new Date().toISOString(),
+        })
         for (const file of selectedFiles) {
           const fd = new FormData()
           fd.append("file", file)
