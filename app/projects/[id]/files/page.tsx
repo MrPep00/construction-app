@@ -95,6 +95,10 @@ export default async function ProjectFilesPage({
     .order("created_at", { ascending: false })
     .limit(limit + 1)
   if (category === "issue_photo") filesQuery = filesQuery.or(PHOTO_UNION)
+  // "Dokumentacja" is the union's complement: its images belong to Zdjęcia
+  // exclusively. Drawing/protocol stay verbatim — explicit user choice wins.
+  else if (category === "documentation")
+    filesQuery = filesQuery.eq("category", category).not("mime_type", "like", "image/*")
   else if (category) filesQuery = filesQuery.eq("category", category)
 
   const [filesRes, totalRes, ...countResults] = await Promise.all([
@@ -114,11 +118,18 @@ export default async function ProjectFilesPage({
             .or(targetFilter)
             .neq("category", "task_file")
             .or(PHOTO_UNION)
-        : supabase
-            .from("files")
-            .select("id", { count: "exact", head: true })
-            .or(targetFilter)
-            .eq("category", cat)
+        : cat === "documentation"
+          ? supabase
+              .from("files")
+              .select("id", { count: "exact", head: true })
+              .or(targetFilter)
+              .eq("category", cat)
+              .not("mime_type", "like", "image/*")
+          : supabase
+              .from("files")
+              .select("id", { count: "exact", head: true })
+              .or(targetFilter)
+              .eq("category", cat)
     ),
   ])
 
