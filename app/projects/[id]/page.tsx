@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { buttonVariants } from "@/components/ui/button"
 import { ProjectTasksSidePanel } from "@/components/tasks/ProjectTasksSidePanel"
 import { BuildingMatrix, type MatrixRow } from "@/components/dashboard/BuildingMatrix"
+import { DashboardNewIssueButton } from "@/components/dashboard/DashboardNewIssueButton"
 import { MetricCards } from "@/components/dashboard/MetricCards"
 import { apartmentAncestorId } from "@/lib/locations"
 
@@ -125,6 +126,11 @@ export default async function ProjectDashboardPage({
     }
   }
 
+  const apartmentOptions = locations
+    .filter((l) => l.type === "apartment")
+    .sort((a, b) => a.name.localeCompare(b.name, "pl", { numeric: true }))
+    .map((l) => ({ id: l.id, name: l.name, floorId: l.floor_id }))
+
   const matrixRows: MatrixRow[] = floorList.map((floor) => ({
     floorId: floor.id,
     level: floor.level,
@@ -169,6 +175,10 @@ export default async function ProjectDashboardPage({
           >
             Notatki
           </Link>
+          <DashboardNewIssueButton
+            floors={floorList}
+            apartments={apartmentOptions}
+          />
         </div>
       </div>
 

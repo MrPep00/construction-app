@@ -12,11 +12,28 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { toast } from "sonner"
 import { createIssue, updateIssue } from "@/lib/actions/issues"
 import { uploadIssuePhoto } from "@/lib/actions/files"
 import type { IssueRow } from "./IssueListClient"
 
-type CreateMode = { mode: "create"; locationId: string }
+export type IssueFloorOption = { id: string; level: number; label: string }
+export type IssueApartmentOption = { id: string; name: string; floorId: string }
+
+type CreateMode = {
+  mode: "create"
+  /** Known target (location page). When absent, the floor→apartment picker renders. */
+  locationId?: string
+  floors?: IssueFloorOption[]
+  apartments?: IssueApartmentOption[]
+}
 type EditMode = { mode: "edit"; issue: IssueRow; locationId: string }
 
 type Props = (CreateMode | EditMode) & { onClose: () => void }
@@ -33,6 +50,19 @@ export function IssueForm(props: Props) {
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
+  const showTargetPicker = props.mode === "create" && !props.locationId
+  const floors = props.mode === "create" ? (props.floors ?? []) : []
+  const apartments = props.mode === "create" ? (props.apartments ?? []) : []
+
+  const [targetFloorId, setTargetFloorId] = useState(floors[0]?.id ?? "")
+  const [targetLocationId, setTargetLocationId] = useState("")
+  const floorApartments = apartments.filter((a) => a.floorId === targetFloorId)
+
+  const effectiveLocationId =
+    props.mode === "edit"
+      ? props.locationId
+      : (props.locationId ?? targetLocationId)
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     setSelectedFiles(Array.from(e.target.files ?? []))
   }
@@ -42,7 +72,7 @@ export function IssueForm(props: Props) {
     startTransition(async () => {
       if (props.mode === "create") {
         const result = await createIssue({
-          locationId: props.locationId,
+          locationId: effectiveLocationId,
           title,
           description: description || undefined,
           contractor: contractor || undefined,
@@ -53,11 +83,12 @@ export function IssueForm(props: Props) {
         for (const file of selectedFiles) {
           const fd = new FormData()
           fd.append("file", file)
-          fd.append("locationId", props.locationId)
+          fd.append("locationId", effectiveLocationId)
           fd.append("issueId", issueId)
           const r = await uploadIssuePhoto(fd)
           if (r.error) { setError(r.error); return }
         }
+        toast.success("Usterka dodana")
       } else {
         const result = await updateIssue(props.issue.id, {
           title,
@@ -82,6 +113,64 @@ export function IssueForm(props: Props) {
         </DialogHeader>
 
         <div className="space-y-3">
+          {showTargetPicker && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Piętro</label>
+                <Select
+                  value={targetFloorId}
+                  onValueChange={(v) => {
+                    if (!v) return
+                    setTargetFloorId(v)
+                    setTargetLocationId("")
+                  }}
+                  items={floors.map((f) => ({ value: f.id, label: f.label }))}
+                >
+                  <SelectTrigger className="min-h-11 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {floors.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Mieszkanie</label>
+                <Select
+                  value={targetLocationId || null}
+                  onValueChange={(v) => { if (v) setTargetLocationId(v) }}
+                  disabled={floorApartments.length === 0}
+                  items={floorApartments.map((a) => ({
+                    value: a.id,
+                    label: a.name,
+                  }))}
+                >
+                  <SelectTrigger className="min-h-11 w-full">
+                    <SelectValue
+                      placeholder={
+                        floorApartments.length === 0
+                          ? "Brak mieszkań"
+                          : "Wybierz mieszkanie"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {floorApartments.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-1">
             <label className="text-sm font-medium">Krótki opis</label>
             <Input
@@ -158,7 +247,10 @@ export function IssueForm(props: Props) {
           <Button variant="outline" onClick={props.onClose} disabled={isPending}>
             Anuluj
           </Button>
-          <Button onClick={handleSubmit} disabled={isPending || !title.trim()}>
+          <Button
+            onClick={handleSubmit}
+            disabled={isPending || !title.trim() || !effectiveLocationId}
+          >
             {isPending
               ? props.mode === "create" && selectedFiles.length > 0
                 ? "Zapisywanie zdjęć..."
