@@ -134,7 +134,15 @@ export function TasksKanbanClient({
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-2">
-        <Select value={floorId} onValueChange={(v) => updateFloor(v ?? ALL)}>
+        {/* items maps value→label for SelectValue (Base UI renders the raw value otherwise) */}
+        <Select
+          value={floorId}
+          onValueChange={(v) => updateFloor(v ?? ALL)}
+          items={[
+            { value: ALL, label: "Wszystkie piętra" },
+            ...floors.map((f) => ({ value: f.id, label: f.label })),
+          ]}
+        >
           <SelectTrigger className="min-h-9 w-auto rounded-full">
             <SelectValue />
           </SelectTrigger>

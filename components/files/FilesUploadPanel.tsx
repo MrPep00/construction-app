@@ -44,9 +44,14 @@ export function FilesUploadPanel({
           <label className="text-xs font-medium text-muted-foreground">
             Kategoria
           </label>
+          {/* items maps value→label for SelectValue (Base UI renders the raw value otherwise) */}
           <Select
             value={category}
             onValueChange={(v) => { if (v) setCategory(v as UploadCategory) }}
+            items={UPLOAD_CATEGORIES.map((cat) => ({
+              value: cat,
+              label: CATEGORY_LABELS[cat],
+            }))}
           >
             <SelectTrigger className="min-h-11">
               <SelectValue />
@@ -72,6 +77,7 @@ export function FilesUploadPanel({
               setFloorId(v)
               setLocationId(WHOLE_FLOOR)
             }}
+            items={floors.map((f) => ({ value: f.id, label: f.label }))}
           >
             <SelectTrigger className="min-h-11">
               <SelectValue />
@@ -90,7 +96,14 @@ export function FilesUploadPanel({
           <label className="text-xs font-medium text-muted-foreground">
             Mieszkanie
           </label>
-          <Select value={locationId} onValueChange={(v) => { if (v) setLocationId(v) }}>
+          <Select
+            value={locationId}
+            onValueChange={(v) => { if (v) setLocationId(v) }}
+            items={[
+              { value: WHOLE_FLOOR, label: "Całe piętro" },
+              ...floorApartments.map((a) => ({ value: a.id, label: a.name })),
+            ]}
+          >
             <SelectTrigger className="min-h-11">
               <SelectValue />
             </SelectTrigger>

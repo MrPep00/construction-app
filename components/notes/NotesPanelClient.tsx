@@ -342,7 +342,17 @@ export function NotesPanelClient({
           />
           <div className="flex items-center justify-end gap-2">
             {unified && (
-              <Select value={scope} onValueChange={(v) => setScope(v ?? "global")}>
+              <Select
+                value={scope}
+                onValueChange={(v) => setScope(v ?? "global")}
+                items={[
+                  { value: "global", label: "Globalna" },
+                  ...floorOptions.map((f) => ({
+                    value: f.id,
+                    label: shortFloorLabel(f.level),
+                  })),
+                ]}
+              >
                 <SelectTrigger
                   size="sm"
                   className="w-auto min-w-28"
