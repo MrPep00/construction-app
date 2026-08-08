@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import dynamic from "next/dynamic"
 import Image from "next/image"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
@@ -11,11 +11,14 @@ import {
   FileTextIcon,
   FolderIcon,
   PencilRulerIcon,
+  Trash2Icon,
   type LucideIcon,
 } from "lucide-react"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Lightbox } from "@/components/upload/Lightbox"
+import { deleteFile } from "@/lib/actions/files"
 import { isPdf } from "@/lib/files/is-pdf"
 import {
   CATEGORY_LABELS,
@@ -108,6 +111,38 @@ export function ProjectFilesClient({
   const searchParams = useSearchParams()
   const [lightbox, setLightbox] = useState<ProjectFileRow | null>(null)
   const [pdfFile, setPdfFile] = useState<ProjectFileRow | null>(null)
+  // Optimistically removed rows; stale ids are harmless after router.refresh
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set())
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [, startTransition] = useTransition()
+
+  function handleDelete(row: ProjectFileRow) {
+    if (!confirm(`Usunąć plik "${row.name}"? Tej operacji nie można cofnąć.`)) return
+    if (lightbox?.id === row.id) setLightbox(null)
+    if (pdfFile?.id === row.id) setPdfFile(null)
+    setDeletingId(row.id)
+    setDeletedIds((prev) => new Set(prev).add(row.id))
+
+    startTransition(async () => {
+      const result = await deleteFile(row.id)
+      setDeletingId(null)
+      if (result.error) {
+        // Rollback: restore the row, surface the server error verbatim
+        setDeletedIds((prev) => {
+          const copy = new Set(prev)
+          copy.delete(row.id)
+          return copy
+        })
+        toast.error(result.error)
+      } else {
+        toast.success("Plik usunięty")
+        // Resync rail counts + "Wszystkie"
+        router.refresh()
+      }
+    })
+  }
+
+  const visibleRows = rows.filter((row) => !deletedIds.has(row.id))
 
   function setCategory(next: VisibleCategory | null) {
     // Category change resets pagination (limit param intentionally dropped)
@@ -201,7 +236,7 @@ export function ProjectFilesClient({
       </div>
 
       <div className="min-w-0 flex-1">
-        {rows.length === 0 ? (
+        {visibleRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">{emptyLabel}</p>
         ) : (
           <>
@@ -214,10 +249,13 @@ export function ProjectFilesClient({
                     <th className="w-36 px-4 py-3 font-medium">Piętro</th>
                     <th className="w-24 px-4 py-3 font-medium">Rozmiar</th>
                     <th className="w-32 px-4 py-3 font-medium">Data</th>
+                    <th className="w-12 px-2 py-3">
+                      <span className="sr-only">Akcje</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
+                  {visibleRows.map((row) => (
                     <tr key={row.id} className="border-b last:border-b-0 hover:bg-muted/50">
                       <td className="px-4 py-2">
                         {isDownload(row) ? (
@@ -247,6 +285,20 @@ export function ProjectFilesClient({
                       <td className="px-4 py-2 text-muted-foreground">
                         {formatDate(row.createdAt)}
                       </td>
+                      <td className="px-2 py-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="tap-target"
+                          title="Usuń plik"
+                          aria-label={`Usuń ${row.name}`}
+                          disabled={deletingId === row.id}
+                          onClick={() => handleDelete(row)}
+                        >
+                          <Trash2Icon className="size-3.5" />
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -255,7 +307,7 @@ export function ProjectFilesClient({
 
             {/* Mobile: list */}
             <ul className="flex flex-col gap-2 md:hidden">
-              {rows.map((row) => {
+              {visibleRows.map((row) => {
                 const meta = `${row.floorLabel} · ${formatBytes(row.sizeBytes)} · ${formatDate(row.createdAt)}`
                 const inner = (
                   <>
@@ -269,12 +321,15 @@ export function ProjectFilesClient({
                   </>
                 )
                 return (
-                  <li key={row.id}>
+                  <li
+                    key={row.id}
+                    className="flex items-center gap-1 rounded-xl border bg-card p-3"
+                  >
                     {isDownload(row) ? (
                       <a
                         href={row.url ?? "#"}
                         download={row.name}
-                        className="flex min-h-11 items-center gap-3 rounded-xl border bg-card p-3"
+                        className="flex min-h-11 min-w-0 flex-1 items-center gap-3"
                       >
                         {inner}
                       </a>
@@ -282,11 +337,23 @@ export function ProjectFilesClient({
                       <button
                         type="button"
                         onClick={() => openFile(row)}
-                        className="flex min-h-11 w-full items-center gap-3 rounded-xl border bg-card p-3 text-left"
+                        className="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
                       >
                         {inner}
                       </button>
                     )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="tap-target shrink-0"
+                      title="Usuń plik"
+                      aria-label={`Usuń ${row.name}`}
+                      disabled={deletingId === row.id}
+                      onClick={() => handleDelete(row)}
+                    >
+                      <Trash2Icon className="size-3.5" />
+                    </Button>
                   </li>
                 )
               })}
