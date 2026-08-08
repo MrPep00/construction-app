@@ -176,9 +176,21 @@ export default async function ProjectDashboardPage({
         <div>
           <MetricCards
             metrics={[
-              { label: "Otwarte usterki", value: openIssues.length },
-              { label: "Usunięte w tym tygodniu", value: resolvedThisWeek },
-              { label: "Zadania w toku", value: activeTasks },
+              {
+                label: "Otwarte usterki",
+                value: openIssues.length,
+                href: `/projects/${id}/issues`,
+              },
+              {
+                label: "Usunięte w tym tygodniu",
+                value: resolvedThisWeek,
+                href: `/projects/${id}/issues?status=resolved`,
+              },
+              {
+                label: "Zadania w toku",
+                value: activeTasks,
+                href: `/projects/${id}/tasks`,
+              },
               { label: "Pliki", value: filesTotal },
             ]}
           />
