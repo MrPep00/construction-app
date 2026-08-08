@@ -38,7 +38,9 @@ const REASONS: { value: MovementReason; label: string }[] = [
   { value: "correction", label: "Korekta" },
 ]
 
-function formatPalletDisplay(qty: number, palletQty: number): string {
+type InputUnit = "base" | "pallet"
+
+function formatPallets(qty: number, palletQty: number): string {
   const p = qty / palletQty
   if (p % 1 === 0) return `${p}`
   return p.toFixed(2).replace(/\.?0+$/, "")
@@ -54,7 +56,7 @@ export function MovementForm({
   const [itemId, setItemId] = useState(defaultItemId ?? items[0]?.id ?? "")
   const [floorId, setFloorId] = useState(defaultFloorId ?? floors[0]?.id ?? "")
   const [quantity, setQuantity] = useState("")
-  const [palletInput, setPalletInput] = useState("")
+  const [inputUnit, setInputUnit] = useState<InputUnit>("base")
   const [reason, setReason] = useState<MovementReason>("delivery")
   const [note, setNote] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -63,40 +65,40 @@ export function MovementForm({
   const selectedItem = items.find((i) => i.id === itemId)
   const isNegative = reason === "consumption"
   const palletQty = selectedItem?.pallet_qty ?? null
+  const baseUnit = selectedItem?.unit ?? "szt"
 
   function handleItemChange(newId: string) {
     setItemId(newId)
     setQuantity("")
-    setPalletInput("")
+    const next = items.find((i) => i.id === newId)
+    if (!next?.pallet_qty) setInputUnit("base")
   }
 
-  function handleQuantityChange(val: string) {
-    setQuantity(val)
-    const q = parseInt(val, 10)
-    if (!isNaN(q) && q > 0 && palletQty) {
-      setPalletInput(formatPalletDisplay(q, palletQty))
-    } else if (val === "") {
-      setPalletInput("")
+  /** Entered quantity converted to base units (storage stays in base units). */
+  function toBaseQty(): number | null {
+    if (inputUnit === "pallet") {
+      if (!palletQty) return null
+      const p = parseFloat(quantity)
+      if (isNaN(p) || p <= 0) return null
+      return Math.round(p * palletQty)
     }
+    const q = parseInt(quantity, 10)
+    if (isNaN(q) || q <= 0) return null
+    return q
   }
 
-  function handlePalletChange(val: string) {
-    setPalletInput(val)
-    const p = parseFloat(val)
-    if (!isNaN(p) && p > 0 && palletQty) {
-      setQuantity(String(Math.round(p * palletQty)))
-    } else if (val === "") {
-      setQuantity("")
-    }
-  }
+  const baseQty = toBaseQty()
 
   function handleSubmit() {
-    const qty = parseInt(quantity, 10)
-    if (isNaN(qty) || qty <= 0) {
-      setError("Podaj poprawną ilość (liczba całkowita > 0)")
+    if (baseQty === null) {
+      setError(
+        inputUnit === "pallet"
+          ? "Podaj poprawną liczbę palet (> 0)"
+          : "Podaj poprawną ilość (liczba całkowita > 0)"
+      )
       return
     }
-    const delta = isNegative ? -qty : qty
+    const delta = isNegative ? -baseQty : baseQty
     setError(null)
 
     startTransition(async () => {
@@ -181,9 +183,40 @@ export function MovementForm({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Ilość{selectedItem ? ` (${selectedItem.unit})` : ""}
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium">
+                Ilość ({inputUnit === "pallet" ? "pal" : baseUnit})
+              </label>
+              <div
+                className="flex gap-1"
+                role="group"
+                aria-label="Jednostka ilości"
+              >
+                {([
+                  { value: "base", label: baseUnit, disabled: false },
+                  { value: "pallet", label: "pal", disabled: !palletQty },
+                ] as const).map((u) => (
+                  <button
+                    key={u.value}
+                    type="button"
+                    disabled={u.disabled}
+                    onClick={() => {
+                      setInputUnit(u.value)
+                      setQuantity("")
+                    }}
+                    className={cn(
+                      "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                      inputUnit === u.value
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-input hover:bg-muted",
+                      u.disabled && "cursor-not-allowed opacity-50 hover:bg-transparent"
+                    )}
+                  >
+                    {u.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="flex items-center gap-2">
               <span
@@ -196,9 +229,10 @@ export function MovementForm({
               </span>
               <Input
                 type="number"
-                min="1"
+                min={inputUnit === "pallet" ? "0.5" : "1"}
+                step={inputUnit === "pallet" ? "0.5" : "1"}
                 value={quantity}
-                onChange={(e) => handleQuantityChange(e.target.value)}
+                onChange={(e) => setQuantity(e.target.value)}
                 placeholder="0"
                 autoFocus
                 onKeyDown={(e) => {
@@ -208,37 +242,17 @@ export function MovementForm({
             </div>
 
             {palletQty && (
-              <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2.5 space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  Przelicznik: 1 paleta = {palletQty} {selectedItem?.unit}
-                </p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <label className="mb-1 block text-xs text-muted-foreground">Palety</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={palletInput}
-                      onChange={(e) => handlePalletChange(e.target.value)}
-                      placeholder="0"
-                    />
-                  </div>
-                  <span className="mt-5 text-xs text-muted-foreground">→</span>
-                  <div className="flex-1">
-                    <label className="mb-1 block text-xs text-muted-foreground">
-                      {selectedItem?.unit ?? "szt"}
-                    </label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={quantity}
-                      onChange={(e) => handleQuantityChange(e.target.value)}
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Przelicznik: 1 pal. = {palletQty} {baseUnit}
+                {baseQty !== null && (
+                  <>
+                    {" · "}
+                    <span className="font-medium text-foreground">
+                      {baseQty} {baseUnit} = {formatPallets(baseQty, palletQty)} pal.
+                    </span>
+                  </>
+                )}
+              </p>
             )}
           </div>
 
