@@ -81,9 +81,12 @@ export default async function ProjectFilesPage({
       ? `floor_id.in.(${floorIds.join(",")}),location_id.in.(${locationIds.join(",")})`
       : `floor_id.in.(${floorIds.join(",")})`
 
-  // "Zdjęcia" is a display-level union: category issue_photo OR any image/*
-  // file (upload categories unchanged). Repeated .or() filters AND together.
-  const PHOTO_UNION = "category.eq.issue_photo,mime_type.like.image/*"
+  // "Zdjęcia" is a display-level union: issue photos OR image files not
+  // explicitly categorized drawing/protocol (explicit choice wins). Together
+  // with the image-less Dokumentacja this partitions all non-task files.
+  // Repeated .or() filters AND together.
+  const PHOTO_UNION =
+    "category.eq.issue_photo,and(mime_type.like.image/*,category.not.in.(drawing,protocol))"
 
   let filesQuery = supabase
     .from("files")
