@@ -81,6 +81,10 @@ export default async function ProjectFilesPage({
       ? `floor_id.in.(${floorIds.join(",")}),location_id.in.(${locationIds.join(",")})`
       : `floor_id.in.(${floorIds.join(",")})`
 
+  // "Zdjęcia" is a display-level union: category issue_photo OR any image/*
+  // file (upload categories unchanged). Repeated .or() filters AND together.
+  const PHOTO_UNION = "category.eq.issue_photo,mime_type.like.image/*"
+
   let filesQuery = supabase
     .from("files")
     .select(
@@ -90,22 +94,38 @@ export default async function ProjectFilesPage({
     .neq("category", "task_file")
     .order("created_at", { ascending: false })
     .limit(limit + 1)
-  if (category) filesQuery = filesQuery.eq("category", category)
+  if (category === "issue_photo") filesQuery = filesQuery.or(PHOTO_UNION)
+  else if (category) filesQuery = filesQuery.eq("category", category)
 
-  const [filesRes, ...countResults] = await Promise.all([
+  const [filesRes, totalRes, ...countResults] = await Promise.all([
     filesQuery,
+    // Distinct total for "Wszystkie" — the union overlaps other categories,
+    // so summing per-category counts would double-count image files
+    supabase
+      .from("files")
+      .select("id", { count: "exact", head: true })
+      .or(targetFilter)
+      .neq("category", "task_file"),
     ...VISIBLE_CATEGORIES.map((cat) =>
-      supabase
-        .from("files")
-        .select("id", { count: "exact", head: true })
-        .or(targetFilter)
-        .eq("category", cat)
+      cat === "issue_photo"
+        ? supabase
+            .from("files")
+            .select("id", { count: "exact", head: true })
+            .or(targetFilter)
+            .neq("category", "task_file")
+            .or(PHOTO_UNION)
+        : supabase
+            .from("files")
+            .select("id", { count: "exact", head: true })
+            .or(targetFilter)
+            .eq("category", cat)
     ),
   ])
 
   const counts = Object.fromEntries(
     VISIBLE_CATEGORIES.map((cat, i) => [cat, countResults[i].count ?? 0])
   ) as Record<VisibleCategory, number>
+  const total = totalRes.count ?? 0
 
   const fetched = (filesRes.data ?? []) as FileRecord[]
   const hasMore = fetched.length > limit
@@ -150,6 +170,7 @@ export default async function ProjectFilesPage({
       <ProjectFilesClient
         rows={rows}
         counts={counts}
+        total={total}
         active={category}
         hasMore={hasMore}
         limit={limit}

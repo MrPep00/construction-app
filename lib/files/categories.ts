@@ -15,7 +15,8 @@ export const CATEGORY_LABELS: Record<VisibleCategory, string> = {
   drawing: "Rysunki",
   protocol: "Protokoły",
   documentation: "Dokumentacja",
-  issue_photo: "Zdjęcia usterek",
+  // Display-level union in the Pliki tab: issue photos OR any image/* file
+  issue_photo: "Zdjęcia",
 }
 
 export function isVisibleCategory(value: string | undefined | null): value is VisibleCategory {

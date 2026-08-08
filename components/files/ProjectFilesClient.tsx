@@ -89,12 +89,16 @@ function FileThumb({ row, size }: { row: ProjectFileRow; size: number }) {
 export function ProjectFilesClient({
   rows,
   counts,
+  total,
   active,
   hasMore,
   limit,
 }: {
   rows: ProjectFileRow[]
   counts: Record<VisibleCategory, number>
+  /** Distinct file count — the Zdjęcia union overlaps other categories, so
+   *  summing per-category counts would double-count image files */
+  total: number
   active: VisibleCategory | null
   hasMore: boolean
   limit: number
@@ -104,8 +108,6 @@ export function ProjectFilesClient({
   const searchParams = useSearchParams()
   const [lightbox, setLightbox] = useState<ProjectFileRow | null>(null)
   const [pdfFile, setPdfFile] = useState<ProjectFileRow | null>(null)
-
-  const total = VISIBLE_CATEGORIES.reduce((sum, c) => sum + counts[c], 0)
 
   function setCategory(next: VisibleCategory | null) {
     // Category change resets pagination (limit param intentionally dropped)
