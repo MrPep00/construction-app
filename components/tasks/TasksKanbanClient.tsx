@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -306,12 +307,14 @@ function KanbanCard({
             <EllipsisVerticalIcon className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Przenieś do</DropdownMenuLabel>
-            {TASK_STATUSES.filter((s) => s !== task.status).map((s) => (
-              <DropdownMenuItem key={s} onClick={() => onMove(s)}>
-                {taskStatusConfig[s].label}
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Przenieś do</DropdownMenuLabel>
+              {TASK_STATUSES.filter((s) => s !== task.status).map((s) => (
+                <DropdownMenuItem key={s} onClick={() => onMove(s)}>
+                  {taskStatusConfig[s].label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
