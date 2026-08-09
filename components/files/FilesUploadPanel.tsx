@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { cn } from "@/lib/utils"
 import { FileUploader } from "@/components/upload/FileUploader"
 import {
   CATEGORY_LABELS,
@@ -23,10 +24,18 @@ export function FilesUploadPanel({
   projectId,
   floors,
   apartments,
+  className,
+  uploaderDefaultOpen = false,
+  onUploaded,
 }: {
   projectId: string
   floors: { id: string; level: number; label: string }[]
   apartments: { id: string; name: string; floorId: string }[]
+  className?: string
+  /** Opens the inner FileUploader immediately (FAB dialog skips the extra tap). */
+  uploaderDefaultOpen?: boolean
+  /** Fires when the uploader closes (successful upload or manual close). */
+  onUploaded?: () => void
 }) {
   const [category, setCategory] = useState<UploadCategory>("documentation")
   const [floorId, setFloorId] = useState<string>(WHOLE_PROJECT)
@@ -48,7 +57,7 @@ export function FilesUploadPanel({
   if (floors.length === 0) return null
 
   return (
-    <div className="mb-6 flex flex-col gap-3 rounded-xl border bg-card p-4">
+    <div className={cn("mb-6 flex flex-col gap-3 rounded-xl border bg-card p-4", className)}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted-foreground">
@@ -136,6 +145,8 @@ export function FilesUploadPanel({
       <FileUploader
         key={`${category}-${floorId}-${locationId}`}
         category={category}
+        defaultOpen={uploaderDefaultOpen}
+        onDone={onUploaded}
         {...target}
       />
     </div>

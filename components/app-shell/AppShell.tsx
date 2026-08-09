@@ -42,7 +42,7 @@ export function AppShell({
       {/* pb-36 = mobile bottom nav + FAB clearance; none needed on desktop */}
       <div className="min-w-0 flex-1 pb-36 lg:pb-0">{children}</div>
       <MobileNav projectId={projectId} openIssueCount={openIssueCount} />
-      <Fab floors={floors} apartments={apartments} />
+      <Fab projectId={projectId} floors={floors} apartments={apartments} />
     </div>
   )
 }

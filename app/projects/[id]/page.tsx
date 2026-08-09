@@ -161,10 +161,13 @@ export default async function ProjectDashboardPage({
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">{project.name}</h1>
-        <DashboardNewIssueButton
-          floors={floorList}
-          apartments={apartmentOptions}
-        />
+        {/* Mobile has the FAB (Zdjęcie/Usterka); header button is desktop-only */}
+        <div className="hidden lg:block">
+          <DashboardNewIssueButton
+            floors={floorList}
+            apartments={apartmentOptions}
+          />
+        </div>
       </div>
 
       <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
