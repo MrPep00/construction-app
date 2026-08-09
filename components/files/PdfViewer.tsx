@@ -94,8 +94,6 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     contentX: number
     contentY: number
     prevScale: number
-    /** TEMP instrumentation (Phase 2 anchor-drift): gesture origin tag. */
-    source: "button" | "pinch"
   } | null>(null)
   /** Active touch pointers (client coords) on the scroll container. */
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
@@ -244,7 +242,6 @@ export function PdfViewer({ src, filename, onClose }: Props) {
         contentX: clientX - rect.left,
         contentY: clientY - rect.top,
         prevScale: prev,
-        source: "button",
       }
     }
     showSnapshotOverlay(next)
@@ -279,60 +276,19 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     let raf = 0
     let done = false
 
-    const restore = (waitedMs: number, timedOut: boolean) => {
+    const restore = () => {
       done = true
       const k = scale / anchor.prevScale
       const rect = wrap.getBoundingClientRect()
-      // ── TEMP instrumentation (Phase 2 anchor-drift) — remove on prod green ──
-      const tag = `${anchor.source}/${k > 1 ? "zoom-in" : "zoom-out"}`
-      const deltaX = rect.left + anchor.contentX * k - anchor.clientX
-      const t0 = {
-        t: "t0",
-        tag,
-        rectLeft: rect.left,
-        rectWidth: rect.width,
-        expectedW,
-        waitedMs: Math.round(waitedMs),
-        timedOut,
-        contentX: anchor.contentX,
-        k,
-        targetDeltaX: deltaX,
-        scrollLeftBefore: el.scrollLeft,
-        scrollWidth: el.scrollWidth,
-        clientWidth: el.clientWidth,
-      }
-      el.scrollLeft += deltaX
+      el.scrollLeft += rect.left + anchor.contentX * k - anchor.clientX
       el.scrollTop += rect.top + anchor.contentY * k - anchor.clientY
-      const scrollLeftAfter = el.scrollLeft
-      console.table([{ ...t0, scrollLeftAfter }])
-      requestAnimationFrame(() => {
-        const r1 = wrap.getBoundingClientRect()
-        console.table([
-          {
-            t: "t1",
-            tag,
-            rectLeft: r1.left,
-            rectWidth: r1.width,
-            contentX: anchor.contentX,
-            k,
-            targetDeltaX: deltaX,
-            scrollLeftNow: el.scrollLeft,
-            scrollWidth: el.scrollWidth,
-            clientWidth: el.clientWidth,
-            scrollLeftMovedWithoutUs: el.scrollLeft !== scrollLeftAfter,
-          },
-        ])
-      })
-      // ── end TEMP instrumentation ────────────────────────────────────────────
     }
 
     const tick = () => {
       const w = wrap.getBoundingClientRect().width
       const elapsed = performance.now() - start
-      if (expectedW === null || Math.abs(w - expectedW) <= 1) {
-        restore(elapsed, false)
-      } else if (elapsed > 500) {
-        restore(elapsed, true)
+      if (expectedW === null || Math.abs(w - expectedW) <= 1 || elapsed > 500) {
+        restore()
       } else {
         raf = requestAnimationFrame(tick)
       }
@@ -471,7 +427,6 @@ export function PdfViewer({ src, filename, onClose }: Props) {
       contentX: pinch.originX,
       contentY: pinch.originY,
       prevScale: pinch.startScale,
-      source: "pinch",
     }
     setScale(next)
   }, [getClamps, showSnapshotOverlay])
