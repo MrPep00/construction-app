@@ -259,53 +259,88 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     applyZoomAt(nextRaw, rect.left + rect.width / 2, rect.top + rect.height / 2)
   }, [applyZoomAt])
 
-  // Re-anchor scroll after the scaled page box has laid out.
+  // Re-anchor scroll only once the wrapper carries real post-zoom geometry.
+  // react-pdf resizes its content asynchronously — at commit time the rect
+  // can still be pre-zoom, and a scroll write against stale geometry lands
+  // wrong (and may be clamped by a stale scrollWidth). Poll via rAF until
+  // rect.width matches the expected CSS width (±1px), capped at 500ms, then
+  // restore exactly once per anchor. A newer zoom supersedes a pending one
+  // (cleanup cancels the loop; its anchor is already consumed).
   useLayoutEffect(() => {
     const anchor = pendingAnchorRef.current
     const el = containerRef.current
     const wrap = pageWrapRef.current
     if (!anchor || !el || !wrap || scale === null) return
     pendingAnchorRef.current = null
-    const k = scale / anchor.prevScale
-    const rect = wrap.getBoundingClientRect()
-    // ── TEMP instrumentation (Phase 2 anchor-drift) — remove after diagnosis ──
-    const tag = `${anchor.source}/${k > 1 ? "zoom-in" : "zoom-out"}`
-    const deltaX = rect.left + anchor.contentX * k - anchor.clientX
-    const t0 = {
-      t: "t0",
-      tag,
-      rectLeft: rect.left,
-      rectWidth: rect.width,
-      contentX: anchor.contentX,
-      k,
-      targetDeltaX: deltaX,
-      scrollLeftBefore: el.scrollLeft,
-      scrollWidth: el.scrollWidth,
-      clientWidth: el.clientWidth,
+
+    const dims = pageDimsRef.current
+    const expectedW = dims ? rotatedDims(dims, rotationRef.current).w * scale : null
+    const start = performance.now()
+    let raf = 0
+    let done = false
+
+    const restore = (waitedMs: number, timedOut: boolean) => {
+      done = true
+      const k = scale / anchor.prevScale
+      const rect = wrap.getBoundingClientRect()
+      // ── TEMP instrumentation (Phase 2 anchor-drift) — remove on prod green ──
+      const tag = `${anchor.source}/${k > 1 ? "zoom-in" : "zoom-out"}`
+      const deltaX = rect.left + anchor.contentX * k - anchor.clientX
+      const t0 = {
+        t: "t0",
+        tag,
+        rectLeft: rect.left,
+        rectWidth: rect.width,
+        expectedW,
+        waitedMs: Math.round(waitedMs),
+        timedOut,
+        contentX: anchor.contentX,
+        k,
+        targetDeltaX: deltaX,
+        scrollLeftBefore: el.scrollLeft,
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+      }
+      el.scrollLeft += deltaX
+      el.scrollTop += rect.top + anchor.contentY * k - anchor.clientY
+      const scrollLeftAfter = el.scrollLeft
+      console.table([{ ...t0, scrollLeftAfter }])
+      requestAnimationFrame(() => {
+        const r1 = wrap.getBoundingClientRect()
+        console.table([
+          {
+            t: "t1",
+            tag,
+            rectLeft: r1.left,
+            rectWidth: r1.width,
+            contentX: anchor.contentX,
+            k,
+            targetDeltaX: deltaX,
+            scrollLeftNow: el.scrollLeft,
+            scrollWidth: el.scrollWidth,
+            clientWidth: el.clientWidth,
+            scrollLeftMovedWithoutUs: el.scrollLeft !== scrollLeftAfter,
+          },
+        ])
+      })
+      // ── end TEMP instrumentation ────────────────────────────────────────────
     }
-    el.scrollLeft += deltaX
-    el.scrollTop += rect.top + anchor.contentY * k - anchor.clientY
-    const scrollLeftAfter = el.scrollLeft
-    console.table([{ ...t0, scrollLeftAfter }])
-    requestAnimationFrame(() => {
-      const r1 = wrap.getBoundingClientRect()
-      console.table([
-        {
-          t: "t1",
-          tag,
-          rectLeft: r1.left,
-          rectWidth: r1.width,
-          contentX: anchor.contentX,
-          k,
-          targetDeltaX: deltaX,
-          scrollLeftNow: el.scrollLeft,
-          scrollWidth: el.scrollWidth,
-          clientWidth: el.clientWidth,
-          scrollLeftMovedWithoutUs: el.scrollLeft !== scrollLeftAfter,
-        },
-      ])
-    })
-    // ── end TEMP instrumentation ──────────────────────────────────────────────
+
+    const tick = () => {
+      const w = wrap.getBoundingClientRect().width
+      const elapsed = performance.now() - start
+      if (expectedW === null || Math.abs(w - expectedW) <= 1) {
+        restore(elapsed, false)
+      } else if (elapsed > 500) {
+        restore(elapsed, true)
+      } else {
+        raf = requestAnimationFrame(tick)
+      }
+    }
+    tick()
+    return () => {
+      if (!done) cancelAnimationFrame(raf)
+    }
   }, [scale])
 
   // Initialize to fit-width once page dims + container are known.
@@ -365,7 +400,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     return () => window.removeEventListener("keydown", handleKey)
   }, [onClose, goToPrev, goToNext, zoomIn, zoomOut, rotate])
 
-  // Trackpad pinch / ctrl+wheel zoom, anchored to container center.
+  // Trackpad pinch / ctrl+wheel zoom, anchored at the cursor.
   // Non-passive listener — React's synthetic wheel can't preventDefault.
   // Must depend on `mounted`: the portal renders only after it flips, so the
   // first pass sees containerRef null and would never attach.
@@ -377,11 +412,11 @@ export function PdfViewer({ src, filename, onClose }: Props) {
       e.preventDefault()
       const current = scaleRef.current
       if (current === null) return
-      applyZoom(current * (e.deltaY < 0 ? 1.1 : 1 / 1.1))
+      applyZoomAt(current * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.clientX, e.clientY)
     }
     el.addEventListener("wheel", handleWheel, { passive: false })
     return () => el.removeEventListener("wheel", handleWheel)
-  }, [mounted, applyZoom])
+  }, [mounted, applyZoomAt])
 
   // ── Touch gestures: pinch + double-tap ────────────────────────────────────
   // Pointer events cannot cancel native scrolling, and with touch-action
@@ -697,9 +732,14 @@ export function PdfViewer({ src, filename, onClose }: Props) {
       </div>
 
       {/* Document body — PDF canvas stays white, never theme-filtered */}
+      {/* justify-center is forbidden here: overflow on the start side of a
+          centered flex axis is unscrollable by spec, and the centering offset
+          poisons rect.left during anchor restore. Centering comes from
+          mx-auto on the child — auto margins collapse to 0 on overflow, so
+          both edges stay reachable. */}
       <div
         ref={containerRef}
-        className="flex flex-1 items-start justify-center overflow-auto overscroll-contain p-4"
+        className="flex flex-1 items-start overflow-auto overscroll-contain p-4"
         // pan-x pan-y: one-finger scroll + momentum stay native; pinch is ours
         // (two-finger native scroll is suppressed by the touchmove blocker)
         style={{ touchAction: "pan-x pan-y" }}
@@ -709,7 +749,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
         onPointerCancel={handlePointerEnd}
       >
         {loadError ? (
-          <div className="flex flex-col items-center gap-3 pt-16 text-center">
+          <div className="mx-auto flex flex-col items-center gap-3 pt-16 text-center">
             <p className="text-sm text-muted-foreground">
               Nie udało się załadować pliku. Spróbuj go pobrać.
             </p>
@@ -722,7 +762,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
             </a>
           </div>
         ) : (
-          <div ref={pageWrapRef} className="relative min-w-fit">
+          <div ref={pageWrapRef} className="relative mx-auto min-w-fit">
             <Document
               file={src}
               onLoadSuccess={handleLoadSuccess}
