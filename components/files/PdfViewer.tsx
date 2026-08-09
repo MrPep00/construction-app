@@ -94,6 +94,8 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     contentX: number
     contentY: number
     prevScale: number
+    /** TEMP instrumentation (Phase 2 anchor-drift): gesture origin tag. */
+    source: "button" | "pinch"
   } | null>(null)
   /** Active touch pointers (client coords) on the scroll container. */
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
@@ -242,6 +244,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
         contentX: clientX - rect.left,
         contentY: clientY - rect.top,
         prevScale: prev,
+        source: "button",
       }
     }
     showSnapshotOverlay(next)
@@ -265,8 +268,44 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     pendingAnchorRef.current = null
     const k = scale / anchor.prevScale
     const rect = wrap.getBoundingClientRect()
-    el.scrollLeft += rect.left + anchor.contentX * k - anchor.clientX
+    // ── TEMP instrumentation (Phase 2 anchor-drift) — remove after diagnosis ──
+    const tag = `${anchor.source}/${k > 1 ? "zoom-in" : "zoom-out"}`
+    const deltaX = rect.left + anchor.contentX * k - anchor.clientX
+    const t0 = {
+      t: "t0",
+      tag,
+      rectLeft: rect.left,
+      rectWidth: rect.width,
+      contentX: anchor.contentX,
+      k,
+      targetDeltaX: deltaX,
+      scrollLeftBefore: el.scrollLeft,
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }
+    el.scrollLeft += deltaX
     el.scrollTop += rect.top + anchor.contentY * k - anchor.clientY
+    const scrollLeftAfter = el.scrollLeft
+    console.table([{ ...t0, scrollLeftAfter }])
+    requestAnimationFrame(() => {
+      const r1 = wrap.getBoundingClientRect()
+      console.table([
+        {
+          t: "t1",
+          tag,
+          rectLeft: r1.left,
+          rectWidth: r1.width,
+          contentX: anchor.contentX,
+          k,
+          targetDeltaX: deltaX,
+          scrollLeftNow: el.scrollLeft,
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+          scrollLeftMovedWithoutUs: el.scrollLeft !== scrollLeftAfter,
+        },
+      ])
+    })
+    // ── end TEMP instrumentation ──────────────────────────────────────────────
   }, [scale])
 
   // Initialize to fit-width once page dims + container are known.
@@ -397,6 +436,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
       contentX: pinch.originX,
       contentY: pinch.originY,
       prevScale: pinch.startScale,
+      source: "pinch",
     }
     setScale(next)
   }, [getClamps, showSnapshotOverlay])
