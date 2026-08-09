@@ -26,14 +26,20 @@ export default async function ProjectLayout({
     .single()
 
   let openIssueCount = 0
-  const { data: floors } = await supabase.from("floors").select("id").eq("project_id", id)
+  const { data: floors } = await supabase
+    .from("floors")
+    .select("id, level, label")
+    .eq("project_id", id)
+    .order("level", { ascending: false })
   const floorIds = floors?.map((f) => f.id) ?? []
+  let locations: { id: string; name: string; type: string; floor_id: string }[] = []
   if (floorIds.length > 0) {
-    const { data: locations } = await supabase
+    const { data: locationsData } = await supabase
       .from("locations")
-      .select("id")
+      .select("id, name, type, floor_id")
       .in("floor_id", floorIds)
-    const locationIds = locations?.map((l) => l.id) ?? []
+    locations = locationsData ?? []
+    const locationIds = locations.map((l) => l.id)
     if (locationIds.length > 0) {
       const { count } = await supabase
         .from("issues")
@@ -43,6 +49,12 @@ export default async function ProjectLayout({
       openIssueCount = count ?? 0
     }
   }
+
+  // FAB new-issue dialog: floor→apartment cascade options
+  const apartments = locations
+    .filter((l) => l.type === "apartment")
+    .sort((a, b) => a.name.localeCompare(b.name, "pl", { numeric: true }))
+    .map((l) => ({ id: l.id, name: l.name, floorId: l.floor_id }))
 
   const adminUser = isAdmin(user.email)
   let unresolvedErrorCount = 0
@@ -59,6 +71,8 @@ export default async function ProjectLayout({
       isAdminUser={adminUser}
       unresolvedErrorCount={unresolvedErrorCount}
       userEmail={user.email ?? ""}
+      floors={floors ?? []}
+      apartments={apartments}
     >
       {children}
     </AppShell>
