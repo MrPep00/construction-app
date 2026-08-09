@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ThemeToggle } from "./ThemeToggle"
 
 type NavItem = {
   label: string
@@ -140,6 +141,9 @@ export function MobileNav({ projectId, openIssueCount }: Props) {
                 )
               })}
             </ul>
+            <div className="mt-2 border-t pt-3">
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       )}
