@@ -2,7 +2,6 @@ import Link from "next/link"
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { buttonVariants } from "@/components/ui/button"
 import { ProjectTasksSidePanel } from "@/components/tasks/ProjectTasksSidePanel"
 import { BuildingMatrix, type MatrixRow } from "@/components/dashboard/BuildingMatrix"
 import { DashboardNewIssueButton } from "@/components/dashboard/DashboardNewIssueButton"
@@ -162,24 +161,10 @@ export default async function ProjectDashboardPage({
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">{project.name}</h1>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/projects/${id}/inventory`}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            Inwentaryzacja
-          </Link>
-          <Link
-            href={`/projects/${id}/notes`}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            Notatki
-          </Link>
-          <DashboardNewIssueButton
-            floors={floorList}
-            apartments={apartmentOptions}
-          />
-        </div>
+        <DashboardNewIssueButton
+          floors={floorList}
+          apartments={apartmentOptions}
+        />
       </div>
 
       <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
