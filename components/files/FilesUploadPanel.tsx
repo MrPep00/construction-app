@@ -16,22 +16,32 @@ import {
 } from "@/components/ui/select"
 
 const WHOLE_FLOOR = "__floor__"
+// Project-level target: file gets no floor/location (migration 022 — all targets NULL)
+const WHOLE_PROJECT = "__project__"
 
 export function FilesUploadPanel({
+  projectId,
   floors,
   apartments,
 }: {
+  projectId: string
   floors: { id: string; level: number; label: string }[]
   apartments: { id: string; name: string; floorId: string }[]
 }) {
   const [category, setCategory] = useState<UploadCategory>("documentation")
-  const [floorId, setFloorId] = useState<string>(floors[0]?.id ?? "")
+  const [floorId, setFloorId] = useState<string>(WHOLE_PROJECT)
   const [locationId, setLocationId] = useState<string>(WHOLE_FLOOR)
 
+  const isGlobal = floorId === WHOLE_PROJECT
   const floorApartments = apartments.filter((a) => a.floorId === floorId)
-  // XOR target (files_one_target): a chosen apartment wins over the floor
-  const target =
-    locationId !== WHOLE_FLOOR
+  const floorItems = [
+    { value: WHOLE_PROJECT, label: "Globalne (cały projekt)" },
+    ...floors.map((f) => ({ value: f.id, label: f.label })),
+  ]
+  // At most one target (files_one_target): apartment wins over floor; global sends neither
+  const target = isGlobal
+    ? ({ projectId } as const)
+    : locationId !== WHOLE_FLOOR
       ? ({ locationId } as const)
       : ({ floorId } as const)
 
@@ -77,14 +87,14 @@ export function FilesUploadPanel({
               setFloorId(v)
               setLocationId(WHOLE_FLOOR)
             }}
-            items={floors.map((f) => ({ value: f.id, label: f.label }))}
+            items={floorItems}
           >
             <SelectTrigger className="min-h-11">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {floors.map((f) => (
-                <SelectItem key={f.id} value={f.id}>
+              {floorItems.map((f) => (
+                <SelectItem key={f.value} value={f.value}>
                   {f.label}
                 </SelectItem>
               ))}
@@ -92,31 +102,34 @@ export function FilesUploadPanel({
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            Mieszkanie
-          </label>
-          <Select
-            value={locationId}
-            onValueChange={(v) => { if (v) setLocationId(v) }}
-            items={[
-              { value: WHOLE_FLOOR, label: "Całe piętro" },
-              ...floorApartments.map((a) => ({ value: a.id, label: a.name })),
-            ]}
-          >
-            <SelectTrigger className="min-h-11">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={WHOLE_FLOOR}>Całe piętro</SelectItem>
-              {floorApartments.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Global target has no floor, so no apartment to pick */}
+        {!isGlobal && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              Mieszkanie
+            </label>
+            <Select
+              value={locationId}
+              onValueChange={(v) => { if (v) setLocationId(v) }}
+              items={[
+                { value: WHOLE_FLOOR, label: "Całe piętro" },
+                ...floorApartments.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+            >
+              <SelectTrigger className="min-h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={WHOLE_FLOOR}>Całe piętro</SelectItem>
+                {floorApartments.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* key remounts the uploader so a mid-selection change can't mix targets */}

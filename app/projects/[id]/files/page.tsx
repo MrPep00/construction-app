@@ -72,14 +72,10 @@ export default async function ProjectFilesPage({
   const locationById = new Map<string, LocationNode & { name: string }>(
     locations.map((l) => [l.id, l])
   )
-  const locationIds = locations.map((l) => l.id)
 
-  // Files attach to a floor directly OR to a location (XOR); task files are
+  // Migration 022: files carry project_id directly — covers floor, location,
+  // and target-less project-level files in one predicate. Task files are
   // excluded via category (021 contract: single predicate, no task_id checks).
-  const targetFilter =
-    locationIds.length > 0
-      ? `floor_id.in.(${floorIds.join(",")}),location_id.in.(${locationIds.join(",")})`
-      : `floor_id.in.(${floorIds.join(",")})`
 
   // "Zdjęcia" is a display-level union: issue photos OR image files not
   // explicitly categorized drawing/protocol (explicit choice wins). Together
@@ -93,7 +89,7 @@ export default async function ProjectFilesPage({
     .select(
       "id, name, mime_type, size_bytes, created_at, storage_path, storage_provider, category, location_id, floor_id"
     )
-    .or(targetFilter)
+    .eq("project_id", id)
     .neq("category", "task_file")
     .order("created_at", { ascending: false })
     .limit(limit + 1)
@@ -111,27 +107,27 @@ export default async function ProjectFilesPage({
     supabase
       .from("files")
       .select("id", { count: "exact", head: true })
-      .or(targetFilter)
+      .eq("project_id", id)
       .neq("category", "task_file"),
     ...VISIBLE_CATEGORIES.map((cat) =>
       cat === "issue_photo"
         ? supabase
             .from("files")
             .select("id", { count: "exact", head: true })
-            .or(targetFilter)
+            .eq("project_id", id)
             .neq("category", "task_file")
             .or(PHOTO_UNION)
         : cat === "documentation"
           ? supabase
               .from("files")
               .select("id", { count: "exact", head: true })
-              .or(targetFilter)
+              .eq("project_id", id)
               .eq("category", cat)
               .not("mime_type", "like", "image/*")
           : supabase
               .from("files")
               .select("id", { count: "exact", head: true })
-              .or(targetFilter)
+              .eq("project_id", id)
               .eq("category", cat)
     ),
   ])
@@ -148,7 +144,8 @@ export default async function ProjectFilesPage({
   const urls = await resolveFileUrls(files, supabase)
 
   const rows: ProjectFileRow[] = files.map((file) => {
-    let floorLabel = "—"
+    // Target-less rows (022) are project-level — labeled "Projekt" in the Piętro column
+    let floorLabel = "Projekt"
     if (file.floor_id) {
       const floor = floorById.get(file.floor_id)
       floorLabel = floor ? shortFloorLabel(floor.level) : "—"
@@ -180,7 +177,7 @@ export default async function ProjectFilesPage({
   return (
     <main className="px-4 py-6 md:px-6 lg:px-10">
       <h1 className="mb-6 text-2xl font-bold">Pliki</h1>
-      <FilesUploadPanel floors={floors} apartments={apartments} />
+      <FilesUploadPanel projectId={id} floors={floors} apartments={apartments} />
       <ProjectFilesClient
         rows={rows}
         counts={counts}

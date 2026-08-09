@@ -18,6 +18,8 @@ import {
   finalizeFileUpload,
   createUploadPathForFloor,
   finalizeFileUploadForFloor,
+  createUploadPathForProject,
+  finalizeFileUploadForProject,
 } from "@/lib/actions/files"
 type ItemStatus = "pending" | "uploading" | "done" | "error"
 
@@ -41,10 +43,12 @@ type BaseProps = {
   category?: string
 }
 type Props =
-  | (BaseProps & { locationId: string; floorId?: never })
-  | (BaseProps & { floorId: string; locationId?: never })
+  | (BaseProps & { locationId: string; floorId?: never; projectId?: never })
+  | (BaseProps & { floorId: string; locationId?: never; projectId?: never })
+  // Project-level file: no floor/location target (all NULL — migration 022)
+  | (BaseProps & { projectId: string; locationId?: never; floorId?: never })
 
-export function FileUploader({ locationId, floorId, category, defaultOpen = false, onDone }: Props) {
+export function FileUploader({ locationId, floorId, projectId, category, defaultOpen = false, onDone }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(defaultOpen)
   const [items, setItems] = useState<UploadItem[]>([])
@@ -99,9 +103,11 @@ export function FileUploader({ locationId, floorId, category, defaultOpen = fals
       pendingItems.map(async (item) => {
         const mimeType = item.file.type || "application/octet-stream"
 
-        const urlResult = floorId
-          ? await createUploadPathForFloor(floorId, item.file.name, mimeType, item.file.size)
-          : await createUploadPath(locationId!, item.file.name, mimeType, item.file.size)
+        const urlResult = projectId
+          ? await createUploadPathForProject(projectId, item.file.name, mimeType, item.file.size)
+          : floorId
+            ? await createUploadPathForFloor(floorId, item.file.name, mimeType, item.file.size)
+            : await createUploadPath(locationId!, item.file.name, mimeType, item.file.size)
 
         if (urlResult.error || !urlResult.data) {
           setItems((prev) =>
@@ -126,9 +132,11 @@ export function FileUploader({ locationId, floorId, category, defaultOpen = fals
           return { name: item.file.name, error: `Upload nieudany (${uploadResp.status})` }
         }
 
-        const finalResult = floorId
-          ? await finalizeFileUploadForFloor(floorId, path, item.file.name, mimeType, item.file.size, category)
-          : await finalizeFileUpload(locationId!, path, item.file.name, mimeType, item.file.size, category)
+        const finalResult = projectId
+          ? await finalizeFileUploadForProject(projectId, path, item.file.name, mimeType, item.file.size, category)
+          : floorId
+            ? await finalizeFileUploadForFloor(floorId, path, item.file.name, mimeType, item.file.size, category)
+            : await finalizeFileUpload(locationId!, path, item.file.name, mimeType, item.file.size, category)
 
         setItems((prev) =>
           prev.map((i) =>
