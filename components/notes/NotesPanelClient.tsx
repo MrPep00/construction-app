@@ -41,8 +41,10 @@ interface Props {
   notes: NoteRow[]
   projectId: string
   floorId?: string | null
-  /** Floors carrying notes, for filter chips + composer scope; empty in floor-scoped mode */
+  /** Floors carrying notes, for filter chips; empty in floor-scoped mode */
   floorOptions: FloorOption[]
+  /** ALL project floors (top-first) for the composer scope select */
+  composerFloorOptions: FloorOption[]
   currentAuthor: Author | null
 }
 
@@ -185,6 +187,7 @@ export function NotesPanelClient({
   projectId,
   floorId,
   floorOptions,
+  composerFloorOptions,
   currentAuthor,
 }: Props) {
   const router = useRouter()
@@ -235,7 +238,7 @@ export function NotesPanelClient({
     if (!content) return
     setNewContent("")
     const scopedFloor = unified
-      ? (floorOptions.find((f) => f.id === scope) ?? null)
+      ? (composerFloorOptions.find((f) => f.id === scope) ?? null)
       : null
     const targetFloorId = floorId ?? scopedFloor?.id ?? null
     startTransition(async () => {
@@ -347,7 +350,7 @@ export function NotesPanelClient({
                 onValueChange={(v) => setScope(v ?? "global")}
                 items={[
                   { value: "global", label: "Globalna" },
-                  ...floorOptions.map((f) => ({
+                  ...composerFloorOptions.map((f) => ({
                     value: f.id,
                     label: shortFloorLabel(f.level),
                   })),
@@ -362,7 +365,7 @@ export function NotesPanelClient({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="global">Globalna</SelectItem>
-                  {floorOptions.map((f) => (
+                  {composerFloorOptions.map((f) => (
                     <SelectItem key={f.id} value={f.id}>
                       {shortFloorLabel(f.level)}
                     </SelectItem>
