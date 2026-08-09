@@ -176,7 +176,7 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
                           </span>
                           {(task.location_name || task.floor_label) && (
                             <div className="mt-0.5">
-                              <span className="inline-block rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                              <span className="inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                                 {task.location_name ?? task.floor_label}
                               </span>
                             </div>
@@ -266,7 +266,7 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
                                     className="flex items-center gap-1.5 rounded-md border bg-muted px-2 py-1.5 text-xs hover:bg-muted/80"
                                     aria-label={`Podgląd PDF: ${file.name}`}
                                   >
-                                    <FileTextIcon className="size-3.5 shrink-0 text-red-500" />
+                                    <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />
                                     <span className="max-w-[120px] truncate">{file.name}</span>
                                   </button>
                                 )
