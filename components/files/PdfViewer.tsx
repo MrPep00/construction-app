@@ -328,6 +328,8 @@ export function PdfViewer({ src, filename, onClose }: Props) {
 
   // Trackpad pinch / ctrl+wheel zoom, anchored to container center.
   // Non-passive listener — React's synthetic wheel can't preventDefault.
+  // Must depend on `mounted`: the portal renders only after it flips, so the
+  // first pass sees containerRef null and would never attach.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -340,7 +342,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     }
     el.addEventListener("wheel", handleWheel, { passive: false })
     return () => el.removeEventListener("wheel", handleWheel)
-  }, [applyZoom])
+  }, [mounted, applyZoom])
 
   // ── Touch gestures: pinch + double-tap ────────────────────────────────────
   // Pointer events cannot cancel native scrolling, and with touch-action
@@ -348,6 +350,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
   // touchmove listener suppresses native scroll ONLY while >= 2 pointers are
   // down; one-finger scroll + momentum stay fully native. Known limitation:
   // a scroll already in flight when the second finger lands may run out.
+  // Must depend on `mounted` — same portal-timing trap as the wheel effect.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -356,7 +359,7 @@ export function PdfViewer({ src, filename, onClose }: Props) {
     }
     el.addEventListener("touchmove", block, { passive: false })
     return () => el.removeEventListener("touchmove", block)
-  }, [])
+  }, [mounted])
 
   /** Commit the pinch preview: clear the CSS transform and re-render at the
    *  committed scale, keeping the pinned page point under the fingers.
