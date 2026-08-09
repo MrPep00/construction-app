@@ -33,7 +33,7 @@ export default async function ProjectTasksPage({
     .single()
   if (!project) return notFound()
 
-  const [{ tasks }, floorsRes] = await Promise.all([
+  const [{ tasks, doneHasMore }, floorsRes] = await Promise.all([
     getProjectTasks(id, doneLimit),
     supabase
       .from("floors")
@@ -105,6 +105,8 @@ export default async function ProjectTasksPage({
         tasks={kanbanTasks}
         floors={floors}
         apartments={apartments}
+        doneHasMore={doneHasMore}
+        doneLimit={doneLimit}
       />
     </main>
   )
