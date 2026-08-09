@@ -9,7 +9,7 @@ interface Props {
 
 export async function ProjectTasksSidePanel({ projectId }: Props) {
   const supabase = await createClient()
-  const tasks = await getProjectTasks(projectId)
+  const { tasks } = await getProjectTasks(projectId)
 
   const { data: floorsData } = await supabase
     .from("floors")
@@ -39,6 +39,7 @@ export async function ProjectTasksSidePanel({ projectId }: Props) {
     priority: t.priority,
     due_date: t.due_date,
     created_at: t.created_at,
+    updated_at: t.updated_at,
     files: [],
     location_name: t.location_name,
     floor_label: t.floor_label,

@@ -1,33 +1,29 @@
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getProjectTasks } from "@/lib/actions/tasks"
-import {
-  apartmentAncestorId,
-  shortFloorLabel,
-  type LocationNode,
-} from "@/lib/locations"
+import { type LocationNode } from "@/lib/locations"
+import { buildTaskScope, initialsFromEmail } from "@/lib/tasks/scope"
 import {
   TasksKanbanClient,
   type KanbanTask,
 } from "@/components/tasks/TasksKanbanClient"
 
-/** "gleb.plotnikov00@example.com" -> "GP" */
-function initialsFromEmail(email: string): string {
-  const parts = email
-    .split("@")[0]
-    .split(/[^\p{L}]+/u)
-    .filter(Boolean)
-  if (parts.length === 0) return email.slice(0, 2).toUpperCase()
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[1][0]).toUpperCase()
-}
+const DONE_DEFAULT_LIMIT = 100
+const DONE_MAX_LIMIT = 2000
 
 export default async function ProjectTasksPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ done?: string }>
 }) {
   const { id } = await params
+  const { done: doneParam } = await searchParams
+  const doneLimit = Math.min(
+    Math.max(Number(doneParam) || DONE_DEFAULT_LIMIT, DONE_DEFAULT_LIMIT),
+    DONE_MAX_LIMIT
+  )
   const supabase = await createClient()
 
   const { data: project } = await supabase
@@ -37,8 +33,8 @@ export default async function ProjectTasksPage({
     .single()
   if (!project) return notFound()
 
-  const [tasks, floorsRes] = await Promise.all([
-    getProjectTasks(id),
+  const [{ tasks }, floorsRes] = await Promise.all([
+    getProjectTasks(id, doneLimit),
     supabase
       .from("floors")
       .select("id, level, label")
@@ -75,28 +71,7 @@ export default async function ProjectTasksPage({
   })
 
   const kanbanTasks: KanbanTask[] = tasks.map((t) => {
-    let scopeType: KanbanTask["scopeType"] = "global"
-    let scopeLabel = "Ogólne"
-    let effectiveFloorId: string | null = null
-
-    if (t.location_id) {
-      scopeType = "location"
-      const loc = locationById.get(t.location_id)
-      effectiveFloorId = loc?.floor_id ?? null
-      const aptId = apartmentAncestorId(t.location_id, locationById)
-      const name = aptId
-        ? (locationById.get(aptId)?.name ?? loc?.name ?? "?")
-        : (loc?.name ?? "?")
-      const level = loc ? floorLevelById.get(loc.floor_id) : undefined
-      scopeLabel = level !== undefined ? `${name} · ${shortFloorLabel(level)}` : name
-    } else if (t.floor_id) {
-      scopeType = "floor"
-      effectiveFloorId = t.floor_id
-      const level = floorLevelById.get(t.floor_id)
-      scopeLabel =
-        level !== undefined ? shortFloorLabel(level) : (t.floor_label ?? "Piętro")
-    }
-
+    const scope = buildTaskScope(t, locationById, floorLevelById)
     const creator = t.created_by ? initialsByUserId.get(t.created_by) : undefined
 
     return {
@@ -107,12 +82,11 @@ export default async function ProjectTasksPage({
       priority: t.priority,
       due_date: t.due_date,
       created_at: t.created_at,
+      updated_at: t.updated_at,
       files: [],
       location_name: t.location_name,
       floor_label: t.floor_label,
-      scopeType,
-      scopeLabel,
-      effectiveFloorId,
+      ...scope,
       initials: creator?.initials ?? null,
       creatorEmail: creator?.email ?? null,
     }

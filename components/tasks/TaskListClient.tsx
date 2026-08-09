@@ -34,6 +34,7 @@ export type TaskRow = {
   priority: number
   due_date: string | null
   created_at: string
+  updated_at: string
   files: FileItem[]
   location_name?: string | null
   floor_label?: string | null

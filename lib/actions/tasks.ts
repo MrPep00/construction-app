@@ -16,12 +16,19 @@ export type TaskWithScope = {
   priority: number
   due_date: string | null
   created_at: string
+  updated_at: string
   floor_id: string | null
   floor_label: string | null
   location_id: string | null
   location_name: string | null
   /** Only populated by getProjectTasks (kanban creator initials) */
   created_by?: string | null
+}
+
+export type ProjectTasksResult = {
+  tasks: TaskWithScope[]
+  /** True when more done tasks exist beyond doneLimit */
+  doneHasMore: boolean
 }
 
 async function revalidateTaskPaths(
@@ -257,18 +264,42 @@ export async function deleteTask(
   }
 }
 
-// Returns all tasks for a project with scope labels (for project-level panel + stickers)
-export async function getProjectTasks(projectId: string): Promise<TaskWithScope[]> {
+// Returns project tasks with scope labels (for kanban + project-level panel).
+// todo/doing fetched fully; done fetch-capped (most recently updated first).
+export async function getProjectTasks(
+  projectId: string,
+  doneLimit = 100
+): Promise<ProjectTasksResult> {
   try {
     const supabase = await createClient()
 
-    const { data: tasks } = await supabase
-      .from("tasks")
-      .select("id, title, description, status, priority, due_date, created_at, floor_id, location_id, created_by")
-      .eq("project_id", projectId)
-      .order("priority", { ascending: true })
+    const TASK_COLUMNS =
+      "id, title, description, status, priority, due_date, created_at, updated_at, floor_id, location_id, created_by"
 
-    if (!tasks || tasks.length === 0) return []
+    const [activeRes, doneRes] = await Promise.all([
+      supabase
+        .from("tasks")
+        .select(TASK_COLUMNS)
+        .eq("project_id", projectId)
+        .neq("status", "done")
+        .order("priority", { ascending: true }),
+      supabase
+        .from("tasks")
+        .select(TASK_COLUMNS)
+        .eq("project_id", projectId)
+        .eq("status", "done")
+        .order("updated_at", { ascending: false })
+        .limit(doneLimit + 1),
+    ])
+
+    const doneFetched = doneRes.data ?? []
+    const doneHasMore = doneFetched.length > doneLimit
+    const tasks = [
+      ...(activeRes.data ?? []),
+      ...(doneHasMore ? doneFetched.slice(0, doneLimit) : doneFetched),
+    ]
+
+    if (tasks.length === 0) return { tasks: [], doneHasMore: false }
 
     // Resolve floor labels
     const floorIds = [...new Set(tasks.filter((t) => t.floor_id).map((t) => t.floor_id as string))]
@@ -292,22 +323,26 @@ export async function getProjectTasks(projectId: string): Promise<TaskWithScope[
       ;(locs ?? []).forEach((l) => locationNameMap.set(l.id, l.name))
     }
 
-    return tasks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      description: t.description,
-      status: t.status as TaskStatus,
-      priority: t.priority,
-      due_date: t.due_date,
-      created_at: t.created_at,
-      floor_id: t.floor_id,
-      floor_label: t.floor_id ? (floorLabelMap.get(t.floor_id) ?? null) : null,
-      location_id: t.location_id,
-      location_name: t.location_id ? (locationNameMap.get(t.location_id) ?? null) : null,
-      created_by: t.created_by,
-    }))
+    return {
+      tasks: tasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        status: t.status as TaskStatus,
+        priority: t.priority,
+        due_date: t.due_date,
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+        floor_id: t.floor_id,
+        floor_label: t.floor_id ? (floorLabelMap.get(t.floor_id) ?? null) : null,
+        location_id: t.location_id,
+        location_name: t.location_id ? (locationNameMap.get(t.location_id) ?? null) : null,
+        created_by: t.created_by,
+      })),
+      doneHasMore,
+    }
   } catch {
-    return []
+    return { tasks: [], doneHasMore: false }
   }
 }
 
@@ -325,7 +360,7 @@ export async function getFloorTasks(floorId: string): Promise<TaskWithScope[]> {
 
     const { data: floorTasks } = await supabase
       .from("tasks")
-      .select("id, title, description, status, priority, due_date, created_at")
+      .select("id, title, description, status, priority, due_date, created_at, updated_at")
       .eq("floor_id", floorId)
       .order("priority", { ascending: true })
 
@@ -346,13 +381,14 @@ export async function getFloorTasks(floorId: string): Promise<TaskWithScope[]> {
       priority: number
       due_date: string | null
       created_at: string
+      updated_at: string
       location_id: string | null
     }> = []
 
     if (locationIds.length > 0) {
       const { data } = await supabase
         .from("tasks")
-        .select("id, title, description, status, priority, due_date, created_at, location_id")
+        .select("id, title, description, status, priority, due_date, created_at, updated_at, location_id")
         .in("location_id", locationIds)
         .order("priority", { ascending: true })
       locationTasks = data ?? []
@@ -367,6 +403,7 @@ export async function getFloorTasks(floorId: string): Promise<TaskWithScope[]> {
         priority: t.priority,
         due_date: t.due_date,
         created_at: t.created_at,
+        updated_at: t.updated_at,
         floor_id: floorId,
         floor_label: floorLabel,
         location_id: null,
@@ -380,6 +417,7 @@ export async function getFloorTasks(floorId: string): Promise<TaskWithScope[]> {
         priority: t.priority,
         due_date: t.due_date,
         created_at: t.created_at,
+        updated_at: t.updated_at,
         floor_id: floorId,
         floor_label: floorLabel,
         location_id: t.location_id,
@@ -398,7 +436,7 @@ export async function getLocationTasks(locationId: string): Promise<TaskWithScop
 
     const { data: tasks } = await supabase
       .from("tasks")
-      .select("id, title, description, status, priority, due_date, created_at, floor_id, location_id")
+      .select("id, title, description, status, priority, due_date, created_at, updated_at, floor_id, location_id")
       .eq("location_id", locationId)
       .order("priority", { ascending: true })
 
@@ -410,6 +448,7 @@ export async function getLocationTasks(locationId: string): Promise<TaskWithScop
       priority: t.priority,
       due_date: t.due_date,
       created_at: t.created_at,
+      updated_at: t.updated_at,
       floor_id: t.floor_id,
       floor_label: null,
       location_id: t.location_id,

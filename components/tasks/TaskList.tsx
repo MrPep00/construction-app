@@ -22,6 +22,7 @@ export async function TaskList({ projectId, floorId }: Props) {
     priority: number
     due_date: string | null
     created_at: string
+    updated_at: string
     location_name?: string | null
     floor_label?: string | null
   }
@@ -41,7 +42,7 @@ export async function TaskList({ projectId, floorId }: Props) {
   } else {
     const { data } = await supabase
       .from("tasks")
-      .select("id, title, description, status, priority, due_date, created_at")
+      .select("id, title, description, status, priority, due_date, created_at, updated_at")
       .eq("project_id", projectId)
       .is("floor_id", null)
       .is("location_id", null)
@@ -94,6 +95,7 @@ export async function TaskList({ projectId, floorId }: Props) {
     priority: t.priority,
     due_date: t.due_date,
     created_at: t.created_at,
+    updated_at: t.updated_at,
     files: filesMap.get(t.id) ?? [],
     location_name: t.location_name ?? null,
     floor_label: t.floor_label ?? null,
