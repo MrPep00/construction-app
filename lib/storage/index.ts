@@ -6,7 +6,7 @@
  * current R2 files (storage_provider='r2') in a single batched call.
  */
 
-import { getR2SignedUrl, getR2PublicUrl, isR2Configured } from "./r2"
+import { getR2SignedUrl, getR2PublicUrl, isR2Configured, deleteFromR2 } from "./r2"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 type FileRef = {
@@ -59,6 +59,25 @@ export async function resolveFileUrls(
   }
 
   return urlMap
+}
+
+/**
+ * Best-effort removal of the stored object behind a `files` row, branching on
+ * storage_provider. Never throws — callers proceed to DB cleanup regardless,
+ * matching the established deleteFile semantics.
+ */
+export async function deleteStoredObject(
+  file: { storage_path: string; storage_provider: string },
+  supabase: SupabaseClient
+): Promise<void> {
+  if (file.storage_provider === "r2") {
+    await deleteFromR2(file.storage_path).catch(() => {})
+  } else {
+    await supabase.storage
+      .from("files")
+      .remove([file.storage_path])
+      .catch(() => {})
+  }
 }
 
 export { isR2Configured, getR2SignedUrl, getR2PublicUrl, getR2PresignedPutUrl } from "./r2"

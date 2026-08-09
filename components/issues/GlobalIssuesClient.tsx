@@ -4,15 +4,16 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { ImageIcon } from "lucide-react"
+import { ImageIcon, Trash2Icon } from "lucide-react"
 import { formatDistanceToNowStrict } from "date-fns"
 import { pl } from "date-fns/locale"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { IssueStatus } from "@/lib/types/db"
-import { resolveIssue, reopenIssue } from "@/lib/actions/issues"
+import { resolveIssue, reopenIssue, deleteIssue } from "@/lib/actions/issues"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "./StatusBadge"
+import { DeleteIssueDialog, type PhotoAction } from "./DeleteIssueDialog"
 import {
   Select,
   SelectContent,
@@ -33,6 +34,7 @@ export type GlobalIssueRow = {
   locationLabel: string
   href: string
   thumbUrl: string | null
+  photoCount: number
 }
 
 type StatusFilter = "open" | "resolved" | "all"
@@ -108,6 +110,9 @@ export function GlobalIssuesClient({
 
   // Local copy for optimistic status toggles; resyncs when server data refreshes
   const [items, setItems] = useState(rows)
+  const [deleteTarget, setDeleteTarget] = useState<GlobalIssueRow | null>(null)
+  // Optimistically removed rows, filtered out until the post-delete refresh lands
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set())
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
   const pendingIdsRef = useRef(pendingIds)
   pendingIdsRef.current = pendingIds
@@ -152,6 +157,36 @@ export function GlobalIssuesClient({
     }
   }
 
+  function requestDelete(row: GlobalIssueRow) {
+    if (row.photoCount === 0) {
+      // FileGridClient pattern: plain confirm when nothing else is at stake
+      if (!confirm(`Usunąć usterkę "${row.title}"? Tej operacji nie można cofnąć.`)) return
+      performDelete(row, "keep")
+    } else {
+      setDeleteTarget(row)
+    }
+  }
+
+  function performDelete(row: GlobalIssueRow, photoAction: PhotoAction) {
+    setDeleteTarget(null)
+    setRemovedIds((prev) => new Set(prev).add(row.id))
+    void (async () => {
+      const result = await deleteIssue(row.id, photoAction)
+      if (result.error) {
+        setRemovedIds((prev) => {
+          const copy = new Set(prev)
+          copy.delete(row.id)
+          return copy
+        })
+        toast.error(result.error)
+      } else {
+        toast.success("Usterka usunięta")
+        // Server truth + sidebar/mobile badge resync
+        router.refresh()
+      }
+    })()
+  }
+
   const apartmentOptions = useMemo(
     () =>
       filters.floorId === ALL
@@ -170,6 +205,7 @@ export function GlobalIssuesClient({
   )
 
   const filtered = items.filter((r) => {
+    if (removedIds.has(r.id)) return false
     if (filters.status !== "all" && r.status !== filters.status) return false
     if (filters.floorId !== ALL && r.floorId !== filters.floorId) return false
     if (filters.apartmentId !== ALL && r.apartmentId !== filters.apartmentId)
@@ -306,7 +342,18 @@ export function GlobalIssuesClient({
                 </div>
               </Link>
               <div className="flex shrink-0 flex-col items-end justify-between gap-2">
-                <StatusBadge status={row.status} />
+                <div className="flex items-center gap-1">
+                  <StatusBadge status={row.status} />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => requestDelete(row)}
+                    aria-label={`Usuń usterkę: ${row.title}`}
+                  >
+                    <Trash2Icon className="size-3.5" />
+                  </Button>
+                </div>
                 <Button
                   type="button"
                   variant="outline"
@@ -328,6 +375,16 @@ export function GlobalIssuesClient({
             Pokaż więcej
           </Button>
         </div>
+      )}
+
+      {deleteTarget && (
+        <DeleteIssueDialog
+          issueTitle={deleteTarget.title}
+          photoCount={deleteTarget.photoCount}
+          locationLabel={deleteTarget.locationLabel}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={(photoAction) => performDelete(deleteTarget, photoAction)}
+        />
       )}
     </div>
   )

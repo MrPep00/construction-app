@@ -5,6 +5,7 @@ import { randomUUID } from "crypto"
 import { createClient } from "@/lib/supabase/server"
 import { logError } from "@/lib/logging/log-error"
 import { getR2PresignedPutUrl, uploadToR2, deleteFromR2, isR2Configured } from "@/lib/storage/r2"
+import { deleteStoredObject } from "@/lib/storage"
 import { isUploadCategory } from "@/lib/files/categories"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
@@ -410,11 +411,7 @@ export async function deleteFile(id: string) {
     if (!file) return { error: "Plik nie znaleziony" }
 
     // Best-effort storage deletion — proceed to DB cleanup even on failure
-    if (file.storage_provider === "r2") {
-      await deleteFromR2(file.storage_path).catch(() => {})
-    } else {
-      await supabase.storage.from("files").remove([file.storage_path])
-    }
+    await deleteStoredObject(file, supabase)
 
     const { error: dbError } = await supabase.from("files").delete().eq("id", id)
     if (dbError) return { error: dbError.message }

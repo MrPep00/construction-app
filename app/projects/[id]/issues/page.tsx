@@ -103,10 +103,13 @@ export default async function ProjectIssuesPage({
     string,
     { storage_path: string; storage_provider: "supabase" | "r2" }
   >()
+  const photoCountByIssue = new Map<string, number>()
   photosData?.forEach((p) => {
-    if (p.issue_id && !firstPhotoByIssue.has(p.issue_id)) {
+    if (!p.issue_id) return
+    if (!firstPhotoByIssue.has(p.issue_id)) {
       firstPhotoByIssue.set(p.issue_id, p)
     }
+    photoCountByIssue.set(p.issue_id, (photoCountByIssue.get(p.issue_id) ?? 0) + 1)
   })
   const thumbUrls = await resolveFileUrls(
     [...firstPhotoByIssue.values()],
@@ -132,6 +135,7 @@ export default async function ProjectIssuesPage({
         const photo = firstPhotoByIssue.get(issue.id)
         return photo ? (thumbUrls.get(photo.storage_path) ?? null) : null
       })(),
+      photoCount: photoCountByIssue.get(issue.id) ?? 0,
     }
   })
 

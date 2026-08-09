@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { logError } from "@/lib/logging/log-error"
+import { deleteStoredObject } from "@/lib/storage"
 
 async function revalidateIssuePaths(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -210,8 +211,24 @@ export async function updateIssue(
   }
 }
 
+/**
+ * Deletes an issue with explicit photo handling. files.issue_id is
+ * ON DELETE SET NULL (migration 005), so photos must be handled BEFORE the
+ * issue row goes away — afterwards the linkage is gone.
+ *
+ * - "keep" (default): photos stay on their XOR target (location_id untouched),
+ *   issue_id cleared + category set to 'documentation' so they surface under
+ *   Zdjęcia / Dokumentacja instead of dangling as issue_photo.
+ * - "delete": storage objects removed (best-effort, provider-aware), then the
+ *   file rows — same machinery as deleteFile, so R2 is never orphaned.
+ *
+ * Order: photo handling first, issue delete last. Not transactional (no tx in
+ * supabase-js) — a failure between the steps leaves photos already handled but
+ * the issue intact, which is retryable and never orphans storage.
+ */
 export async function deleteIssue(
-  id: string
+  id: string,
+  photoAction: "keep" | "delete" = "keep"
 ): Promise<{ data?: boolean; error?: string }> {
   try {
     const supabase = await createClient()
@@ -221,6 +238,9 @@ export async function deleteIssue(
     if (!user) return { error: "Nie zalogowany" }
 
     if (!z.string().uuid().safeParse(id).success) return { error: "Nieprawidłowe ID" }
+    if (!z.enum(["keep", "delete"]).safeParse(photoAction).success) {
+      return { error: "Nieprawidłowa akcja dla zdjęć" }
+    }
 
     const { data: issue } = await supabase
       .from("issues")
@@ -228,6 +248,28 @@ export async function deleteIssue(
       .eq("id", id)
       .single()
     if (!issue) return { error: "Usterka nie istnieje" }
+
+    const { data: photos } = await supabase
+      .from("files")
+      .select("id, storage_path, storage_provider")
+      .eq("issue_id", id)
+
+    if (photos && photos.length > 0) {
+      if (photoAction === "delete") {
+        await Promise.all(photos.map((f) => deleteStoredObject(f, supabase)))
+        const { error: filesError } = await supabase
+          .from("files")
+          .delete()
+          .in("id", photos.map((f) => f.id))
+        if (filesError) return { error: filesError.message }
+      } else {
+        const { error: keepError } = await supabase
+          .from("files")
+          .update({ issue_id: null, category: "documentation" })
+          .eq("issue_id", id)
+        if (keepError) return { error: keepError.message }
+      }
+    }
 
     const { error } = await supabase.from("issues").delete().eq("id", id)
     if (error) return { error: error.message }
@@ -238,7 +280,7 @@ export async function deleteIssue(
     await logError({
       error,
       actionName: "deleteIssue",
-      context: { issueId: id },
+      context: { issueId: id, photoAction },
     })
     return { error: "Nie udało się usunąć usterki" }
   }
