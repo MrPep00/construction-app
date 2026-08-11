@@ -1,7 +1,9 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { isAdmin } from "@/lib/auth/admin-check"
 import { resolveFileUrls } from "@/lib/storage"
+import { ZoneActions } from "@/components/floors/ZoneActions"
 import { LocationTabs } from "@/components/tree/LocationTabs"
 import { TaskList } from "@/components/tasks/TaskList"
 import { NotesPanel } from "@/components/notes/NotesPanel"
@@ -24,6 +26,9 @@ export default async function FloorPage({
   if (isNaN(level)) return notFound()
 
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const { data: project } = await supabase
     .from("projects")
@@ -35,7 +40,7 @@ export default async function FloorPage({
 
   const { data: floor } = await supabase
     .from("floors")
-    .select("id, level, label")
+    .select("id, level, label, kind")
     .eq("project_id", id)
     .eq("level", level)
     .single()
@@ -101,7 +106,12 @@ export default async function FloorPage({
         <span className="text-foreground">{floor.label}</span>
       </nav>
 
-      <h1 className="mb-6 text-2xl font-bold">{floor.label}</h1>
+      <div className="mb-6 flex items-center gap-2">
+        <h1 className="text-2xl font-bold">{floor.label}</h1>
+        {floor.kind === "zone" && isAdmin(user?.email) && (
+          <ZoneActions floorId={floor.id} projectId={id} label={floor.label} />
+        )}
+      </div>
 
       <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
         {/* LEFT — folders + tasks/notes/inventory */}
