@@ -2,7 +2,9 @@ import Link from "next/link"
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { isAdmin } from "@/lib/auth/admin-check"
 import { ProjectTasksSidePanel } from "@/components/tasks/ProjectTasksSidePanel"
+import { AddZoneButton } from "@/components/dashboard/AddZoneButton"
 import { BuildingMatrix, type MatrixRow } from "@/components/dashboard/BuildingMatrix"
 import { DashboardNewIssueButton } from "@/components/dashboard/DashboardNewIssueButton"
 import { MetricCards } from "@/components/dashboard/MetricCards"
@@ -32,6 +34,9 @@ export default async function ProjectDashboardPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const { data: project } = await supabase
     .from("projects")
@@ -194,6 +199,12 @@ export default async function ProjectDashboardPage({
             ]}
           />
           <BuildingMatrix projectId={id} rows={matrixRows} />
+          {isAdmin(user?.email) && (
+            <AddZoneButton
+              projectId={id}
+              floors={floorList.map((f) => ({ id: f.id, label: f.label }))}
+            />
+          )}
         </div>
 
         <aside className="mt-6 lg:mt-0">
