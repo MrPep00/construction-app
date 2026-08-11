@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { resolveFileUrls } from "@/lib/storage"
 import {
   apartmentAncestorId,
-  shortFloorLabel,
+  floorShortLabel,
   type LocationNode,
 } from "@/lib/locations"
 import { isVisibleCategory, VISIBLE_CATEGORIES, type VisibleCategory } from "@/lib/files/categories"
@@ -54,9 +54,9 @@ export default async function ProjectFilesPage({
 
   const { data: floorsData } = await supabase
     .from("floors")
-    .select("id, level, label")
+    .select("id, level, label, kind, sort_order")
     .eq("project_id", id)
-    .order("level", { ascending: false })
+    .order("sort_order")
   const floors = floorsData ?? []
   const floorIds = floors.map((f) => f.id)
   const floorById = new Map(floors.map((f) => [f.id, f]))
@@ -148,11 +148,11 @@ export default async function ProjectFilesPage({
     let floorLabel = "Projekt"
     if (file.floor_id) {
       const floor = floorById.get(file.floor_id)
-      floorLabel = floor ? shortFloorLabel(floor.level) : "—"
+      floorLabel = floor ? floorShortLabel(floor) : "—"
     } else if (file.location_id) {
       const loc = locationById.get(file.location_id)
       const floor = loc ? floorById.get(loc.floor_id) : undefined
-      const short = floor ? shortFloorLabel(floor.level) : "—"
+      const short = floor ? floorShortLabel(floor) : "—"
       const aptId = loc ? apartmentAncestorId(loc.id, locationById) : null
       const aptName = aptId ? locationById.get(aptId)?.name : undefined
       floorLabel = aptName ? `${short} · ${aptName}` : short

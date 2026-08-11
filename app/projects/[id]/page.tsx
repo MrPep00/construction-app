@@ -43,9 +43,9 @@ export default async function ProjectDashboardPage({
 
   const { data: floors } = await supabase
     .from("floors")
-    .select("id, level, label")
+    .select("id, level, label, kind, sort_order")
     .eq("project_id", id)
-    .order("level", { ascending: false })
+    .order("sort_order")
 
   const floorList = floors ?? []
   const floorIds = floorList.map((f) => f.id)
@@ -134,6 +134,7 @@ export default async function ProjectDashboardPage({
     floorId: floor.id,
     level: floor.level,
     label: floor.label,
+    kind: floor.kind,
     unassignedCount: unassignedByFloor.get(floor.id) ?? 0,
     apartments: locations
       .filter((l) => l.floor_id === floor.id && l.type === "apartment")

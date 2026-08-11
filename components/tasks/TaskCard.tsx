@@ -25,8 +25,8 @@ export type KanbanTask = TaskRow & {
   scopeLabel: string
   /** Floor the task belongs to (via location for location-scoped); null = global */
   effectiveFloorId: string | null
-  /** Floor level for ordering (see lib/tasks/scope.ts); null = global */
-  effectiveFloorLevel: number | null
+  /** Canonical floor position for ordering (see lib/tasks/scope.ts); null = global */
+  effectiveFloorSort: number | null
   /** Apartment/location name for pl-numeric collation; null = global/floor scope */
   locationSortName: string | null
   initials: string | null

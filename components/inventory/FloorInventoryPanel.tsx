@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { sortFloorsForDisplay } from "@/lib/floors"
 import {
   FloorInventoryPanelClient,
   type MovementRow,
@@ -27,13 +28,16 @@ export async function FloorInventoryPanel({ projectId, floorId }: Props) {
       .order("created_at", { ascending: true }),
     supabase
       .from("floors")
-      .select("id, label")
-      .eq("project_id", projectId)
-      .order("level", { ascending: true }),
+      .select("id, label, kind, sort_order")
+      .eq("project_id", projectId),
   ])
 
   const items: ItemOption[] = itemsData ?? []
-  const floors: FloorOption[] = floorsData?.map((f) => ({ id: f.id, label: f.label })) ?? []
+  // Same visual order as before 023: bottom floor first, zones last
+  const floors: FloorOption[] = sortFloorsForDisplay(
+    floorsData ?? [],
+    "bottomFirst"
+  ).map((f) => ({ id: f.id, label: f.label }))
 
   const cells: Record<string, { id: string; on_hand: number; required: number } | undefined> = {}
   const movements: MovementRow[] = []

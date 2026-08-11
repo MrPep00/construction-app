@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Trash2Icon, CheckIcon, XIcon, PencilIcon } from "lucide-react"
 import { toast } from "sonner"
 import { createNote, updateNote, deleteNote } from "@/lib/actions/notes"
-import { shortFloorLabel } from "@/lib/locations"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -29,13 +28,16 @@ export type NoteRow = {
   body: string
   created_at: string
   updated_at: string
+  /** Floor level as filter identity (unique per project, incl. zone levels); null = global */
   floor_level: number | null
+  /** Zone-aware short label, precomputed server-side; null = global */
+  floor_label: string | null
   author_email: string | null
   author_initials: string | null
 }
 
 type Author = { email: string; initials: string }
-type FloorOption = { id: string; level: number }
+type FloorOption = { id: string; level: number; label: string }
 
 interface Props {
   notes: NoteRow[]
@@ -125,7 +127,7 @@ function NoteCard({
         <div className="flex shrink-0 items-center gap-1">
           {showScope && (
             <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-              {note.floor_level === null ? "Globalna" : shortFloorLabel(note.floor_level)}
+              {note.floor_level === null ? "Globalna" : (note.floor_label ?? "—")}
             </span>
           )}
           {!editing && (
@@ -251,6 +253,7 @@ export function NotesPanelClient({
           created_at: now,
           updated_at: now,
           floor_level: scopedFloor?.level ?? null,
+          floor_label: scopedFloor?.label ?? null,
           author_email: currentAuthor?.email ?? null,
           author_initials: currentAuthor?.initials ?? null,
         },
@@ -286,7 +289,7 @@ export function NotesPanelClient({
     { value: "global", label: "Globalne" },
     ...floorOptions.map((f) => ({
       value: String(f.level),
-      label: shortFloorLabel(f.level),
+      label: f.label,
     })),
   ]
 
@@ -352,7 +355,7 @@ export function NotesPanelClient({
                   { value: "global", label: "Globalna" },
                   ...composerFloorOptions.map((f) => ({
                     value: f.id,
-                    label: shortFloorLabel(f.level),
+                    label: f.label,
                   })),
                 ]}
               >
@@ -367,7 +370,7 @@ export function NotesPanelClient({
                   <SelectItem value="global">Globalna</SelectItem>
                   {composerFloorOptions.map((f) => (
                     <SelectItem key={f.id} value={f.id}>
-                      {shortFloorLabel(f.level)}
+                      {f.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { sortFloorsForDisplay } from "@/lib/floors"
 import { InventoryItemTable } from "@/components/inventory/InventoryItemTable"
 import { InventoryPageControls } from "@/components/inventory/InventoryPageControls"
 import { FirstItemPrompt } from "@/components/inventory/FirstItemPrompt"
@@ -24,16 +25,18 @@ export default async function InventoryPage({
   const [{ data: floorsData }, { data: itemsData }] = await Promise.all([
     supabase
       .from("floors")
-      .select("id, label")
-      .eq("project_id", id)
-      .order("level", { ascending: true }),
+      .select("id, label, kind, sort_order")
+      .eq("project_id", id),
     supabase
       .from("inventory_items")
       .select("id, name, unit, pallet_qty")
       .eq("project_id", id),
   ])
 
-  const floors = floorsData?.map((f) => ({ id: f.id, label: f.label })) ?? []
+  // Same visual order as before 023: bottom floor first, zones last
+  const floors = sortFloorsForDisplay(floorsData ?? [], "bottomFirst").map(
+    (f) => ({ id: f.id, label: f.label })
+  )
   const items = itemsData ?? []
 
   return (

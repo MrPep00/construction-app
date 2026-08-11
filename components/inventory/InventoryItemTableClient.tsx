@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { updateRequired, deleteItem } from "@/lib/actions/inventory"
-import { shortFloorLabel } from "@/lib/locations"
 import { MovementForm, type FloorOption } from "./MovementForm"
 
 export type ItemMovement = {
@@ -23,7 +22,8 @@ export type ItemMovement = {
   reason: string
   note: string | null
   created_at: string
-  floor_level: number | null
+  /** Zone-aware short label, precomputed server-side; null = floor deleted */
+  floor_label: string | null
 }
 
 export type InventoryItemRow = {
@@ -33,7 +33,7 @@ export type InventoryItemRow = {
   pallet_qty: number | null
   totalOnHand: number
   totalRequired: number
-  perFloor: { floorId: string; level: number; on_hand: number; required: number }[]
+  perFloor: { floorId: string; floorLabel: string; on_hand: number; required: number }[]
   movements: ItemMovement[]
 }
 
@@ -174,7 +174,7 @@ function PerFloorBreakdown({ row }: { row: InventoryItemRow }) {
                 : "text-muted-foreground"
             )}
           >
-            {shortFloorLabel(f.level)}: {f.on_hand}
+            {f.floorLabel}: {f.on_hand}
           </span>
         </Fragment>
       ))}
@@ -245,7 +245,7 @@ function ExpandedPanel({
               key={f.floorId}
               className="flex min-h-11 items-center justify-between gap-3 px-3 py-2"
             >
-              <span className="text-sm">{shortFloorLabel(f.level)}</span>
+              <span className="text-sm">{f.floorLabel}</span>
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
@@ -301,7 +301,7 @@ function ExpandedPanel({
               >
                 <div className="min-w-0">
                   <p className="text-xs">
-                    {m.floor_level !== null ? shortFloorLabel(m.floor_level) : "—"} ·{" "}
+                    {m.floor_label ?? "—"} ·{" "}
                     {REASON_LABELS[m.reason] ?? m.reason}
                   </p>
                   {m.note && (

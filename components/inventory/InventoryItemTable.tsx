@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { floorShortLabel } from "@/lib/locations"
 import {
   InventoryItemTableClient,
   type InventoryItemRow,
@@ -18,9 +19,9 @@ export async function InventoryItemTable({ projectId }: Props) {
   const [{ data: floorsData }, { data: itemsData }] = await Promise.all([
     supabase
       .from("floors")
-      .select("id, level, label")
+      .select("id, level, label, kind, sort_order")
       .eq("project_id", projectId)
-      .order("level", { ascending: false }),
+      .order("sort_order"),
     supabase
       .from("inventory_items")
       .select("id, name, unit, pallet_qty")
@@ -30,7 +31,7 @@ export async function InventoryItemTable({ projectId }: Props) {
 
   const floors = floorsData ?? []
   const floorOptions: FloorOption[] = floors.map((f) => ({ id: f.id, label: f.label }))
-  const levelByFloorId = new Map(floors.map((f) => [f.id, f.level]))
+  const floorById = new Map(floors.map((f) => [f.id, f]))
   const items = itemsData ?? []
 
   if (items.length === 0) {
@@ -53,6 +54,7 @@ export async function InventoryItemTable({ projectId }: Props) {
 
   const movementsByItem = new Map<string, ItemMovement[]>()
   movementsData?.forEach((m) => {
+    const floor = floorById.get(m.floor_id)
     const list = movementsByItem.get(m.item_id) ?? []
     list.push({
       id: m.id,
@@ -60,22 +62,32 @@ export async function InventoryItemTable({ projectId }: Props) {
       reason: m.reason,
       note: m.note,
       created_at: m.created_at,
-      floor_level: levelByFloorId.get(m.floor_id) ?? null,
+      floor_label: floor ? floorShortLabel(floor) : null,
     })
     movementsByItem.set(m.item_id, list)
   })
 
-  const levelsByItem = new Map<string, { floorId: string; level: number; on_hand: number; required: number }[]>()
+  const levelsByItem = new Map<
+    string,
+    { floorId: string; floorLabel: string; sort: number; on_hand: number; required: number }[]
+  >()
   levelsData?.forEach((l) => {
-    const level = levelByFloorId.get(l.floor_id)
-    if (level === undefined) return
+    const floor = floorById.get(l.floor_id)
+    if (!floor) return
     const list = levelsByItem.get(l.item_id) ?? []
-    list.push({ floorId: l.floor_id, level, on_hand: l.on_hand, required: l.required })
+    list.push({
+      floorId: l.floor_id,
+      floorLabel: floorShortLabel(floor),
+      sort: floor.sort_order,
+      on_hand: l.on_hand,
+      required: l.required,
+    })
     levelsByItem.set(l.item_id, list)
   })
 
   const rows: InventoryItemRow[] = items.map((item) => {
-    const perFloor = (levelsByItem.get(item.id) ?? []).sort((a, b) => b.level - a.level)
+    // Canonical order: top floor first, zones last (was level desc pre-023)
+    const perFloor = (levelsByItem.get(item.id) ?? []).sort((a, b) => a.sort - b.sort)
     return {
       id: item.id,
       name: item.name,

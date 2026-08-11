@@ -28,9 +28,9 @@ export default async function ProjectLayout({
   let openIssueCount = 0
   const { data: floors } = await supabase
     .from("floors")
-    .select("id, level, label")
+    .select("id, level, label, kind, sort_order")
     .eq("project_id", id)
-    .order("level", { ascending: false })
+    .order("sort_order")
   const floorIds = floors?.map((f) => f.id) ?? []
   let locations: { id: string; name: string; type: string; floor_id: string }[] = []
   if (floorIds.length > 0) {

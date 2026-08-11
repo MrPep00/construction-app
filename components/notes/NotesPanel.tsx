@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
+import { sortFloorsForDisplay } from "@/lib/floors"
+import { floorShortLabel } from "@/lib/locations"
 import { NotesPanelClient, type NoteRow } from "./NotesPanelClient"
 
 interface Props {
@@ -25,7 +27,10 @@ export async function NotesPanel({ projectId, floorId }: Props) {
 
   const [{ data: project }, { data: floorsData }] = await Promise.all([
     supabase.from("projects").select("team_id").eq("id", projectId).single(),
-    supabase.from("floors").select("id, level").eq("project_id", projectId),
+    supabase
+      .from("floors")
+      .select("id, level, label, kind, sort_order")
+      .eq("project_id", projectId),
   ])
 
   // Unified stream: without floorId ALL project notes (global + floor-tagged);
@@ -48,16 +53,18 @@ export async function NotesPanel({ projectId, floorId }: Props) {
     })
   }
 
-  const levelByFloorId = new Map((floorsData ?? []).map((f) => [f.id, f.level]))
+  const floorById = new Map((floorsData ?? []).map((f) => [f.id, f]))
 
   const notes: NoteRow[] = (notesData ?? []).map((n) => {
     const email = emailByUserId.get(n.created_by) ?? null
+    const floor = n.floor_id != null ? floorById.get(n.floor_id) : undefined
     return {
       id: n.id,
       body: n.body,
       created_at: n.created_at,
       updated_at: n.updated_at,
-      floor_level: n.floor_id != null ? (levelByFloorId.get(n.floor_id) ?? null) : null,
+      floor_level: floor?.level ?? null,
+      floor_label: floor ? floorShortLabel(floor) : null,
       author_email: email,
       author_initials: email ? initialsFromEmail(email) : null,
     }
@@ -71,9 +78,11 @@ export async function NotesPanel({ projectId, floorId }: Props) {
   )
   const allFloorOptions = floorId
     ? []
-    : (floorsData ?? [])
-        .map((f) => ({ id: f.id, level: f.level }))
-        .sort((a, b) => b.level - a.level)
+    : sortFloorsForDisplay(floorsData ?? [], "topFirst").map((f) => ({
+        id: f.id,
+        level: f.level,
+        label: floorShortLabel(f),
+      }))
   const floorOptions = allFloorOptions.filter((f) => floorIdsWithNotes.has(f.id))
 
   const currentEmail = user?.email ?? null

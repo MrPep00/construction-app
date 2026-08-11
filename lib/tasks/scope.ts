@@ -2,20 +2,29 @@
 
 import {
   apartmentAncestorId,
-  shortFloorLabel,
+  floorShortLabel,
   type LocationNode,
 } from "@/lib/locations"
 
 export type TaskScopeType = "global" | "floor" | "location"
 
+/** Floor row shape the scope builder needs (level/label/kind for the display
+ *  label, sort_order for ordering). */
+export type FloorMeta = {
+  level: number
+  label: string
+  kind: string
+  sort_order: number
+}
+
 export type TaskScope = {
   scopeType: TaskScopeType
-  /** e.g. "Ogólne", "P3", "M31 · P3" */
+  /** e.g. "Ogólne", "P3", "M31 · P3", "Teren zewnętrzny" */
   scopeLabel: string
   /** Floor the task belongs to (via location for location-scoped); null = global */
   effectiveFloorId: string | null
-  /** Floor level for ordering; null = global */
-  effectiveFloorLevel: number | null
+  /** Canonical floor position for ordering (sort_order asc = top of list, zones last); null = global */
+  effectiveFloorSort: number | null
   /** Apartment/location name for pl-numeric collation; null = global/floor scope */
   locationSortName: string | null
 }
@@ -23,7 +32,7 @@ export type TaskScope = {
 export function buildTaskScope(
   task: { floor_id: string | null; location_id: string | null; floor_label?: string | null },
   locationById: Map<string, LocationNode & { name: string }>,
-  floorLevelById: Map<string, number>
+  floorById: Map<string, FloorMeta>
 ): TaskScope {
   if (task.location_id) {
     const loc = locationById.get(task.location_id)
@@ -31,23 +40,22 @@ export function buildTaskScope(
     const name = aptId
       ? (locationById.get(aptId)?.name ?? loc?.name ?? "?")
       : (loc?.name ?? "?")
-    const level = loc ? floorLevelById.get(loc.floor_id) : undefined
+    const floor = loc ? floorById.get(loc.floor_id) : undefined
     return {
       scopeType: "location",
-      scopeLabel: level !== undefined ? `${name} · ${shortFloorLabel(level)}` : name,
+      scopeLabel: floor ? `${name} · ${floorShortLabel(floor)}` : name,
       effectiveFloorId: loc?.floor_id ?? null,
-      effectiveFloorLevel: level ?? null,
+      effectiveFloorSort: floor?.sort_order ?? null,
       locationSortName: name,
     }
   }
   if (task.floor_id) {
-    const level = floorLevelById.get(task.floor_id)
+    const floor = floorById.get(task.floor_id)
     return {
       scopeType: "floor",
-      scopeLabel:
-        level !== undefined ? shortFloorLabel(level) : (task.floor_label ?? "Piętro"),
+      scopeLabel: floor ? floorShortLabel(floor) : (task.floor_label ?? "Piętro"),
       effectiveFloorId: task.floor_id,
-      effectiveFloorLevel: level ?? null,
+      effectiveFloorSort: floor?.sort_order ?? null,
       locationSortName: null,
     }
   }
@@ -55,32 +63,32 @@ export function buildTaskScope(
     scopeType: "global",
     scopeLabel: "Ogólne",
     effectiveFloorId: null,
-    effectiveFloorLevel: null,
+    effectiveFloorSort: null,
     locationSortName: null,
   }
 }
 
 export type SortableTask = {
   scopeType: TaskScopeType
-  effectiveFloorLevel: number | null
+  effectiveFloorSort: number | null
   locationSortName: string | null
   priority: number
   created_at: string
   updated_at: string
 }
 
-/** Shared todo+doing order: Ogólne first, then floors top-first (level desc),
- *  floor-scoped before apartments, apartments by pl-numeric name.
- *  Ties: priority asc, newest created first. */
+/** Shared todo+doing order: Ogólne first, then floors top-first (sort_order
+ *  asc, zones last), floor-scoped before apartments, apartments by pl-numeric
+ *  name. Ties: priority asc, newest created first. */
 export function compareActiveTasks(a: SortableTask, b: SortableTask): number {
   const aGlobal = a.scopeType === "global" ? 0 : 1
   const bGlobal = b.scopeType === "global" ? 0 : 1
   if (aGlobal !== bGlobal) return aGlobal - bGlobal
 
   if (aGlobal === 1) {
-    const aLevel = a.effectiveFloorLevel ?? Number.NEGATIVE_INFINITY
-    const bLevel = b.effectiveFloorLevel ?? Number.NEGATIVE_INFINITY
-    if (aLevel !== bLevel) return bLevel - aLevel
+    const aSort = a.effectiveFloorSort ?? Number.POSITIVE_INFINITY
+    const bSort = b.effectiveFloorSort ?? Number.POSITIVE_INFINITY
+    if (aSort !== bSort) return aSort - bSort
 
     const aLoc = a.locationSortName
     const bLoc = b.locationSortName

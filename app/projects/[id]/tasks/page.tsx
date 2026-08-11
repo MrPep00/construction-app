@@ -2,7 +2,7 @@ import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getProjectTasks } from "@/lib/actions/tasks"
 import { type LocationNode } from "@/lib/locations"
-import { buildTaskScope, initialsFromEmail } from "@/lib/tasks/scope"
+import { buildTaskScope, initialsFromEmail, type FloorMeta } from "@/lib/tasks/scope"
 import {
   TasksKanbanClient,
   type KanbanTask,
@@ -37,14 +37,14 @@ export default async function ProjectTasksPage({
     getProjectTasks(id, doneLimit),
     supabase
       .from("floors")
-      .select("id, level, label")
+      .select("id, level, label, kind, sort_order")
       .eq("project_id", id)
-      .order("level", { ascending: false }),
+      .order("sort_order"),
   ])
 
   const floors = floorsRes.data ?? []
   const floorIds = floors.map((f) => f.id)
-  const floorLevelById = new Map(floors.map((f) => [f.id, f.level]))
+  const floorById = new Map<string, FloorMeta>(floors.map((f) => [f.id, f]))
 
   const { data: locationsData } =
     floorIds.length > 0
@@ -71,7 +71,7 @@ export default async function ProjectTasksPage({
   })
 
   const kanbanTasks: KanbanTask[] = tasks.map((t) => {
-    const scope = buildTaskScope(t, locationById, floorLevelById)
+    const scope = buildTaskScope(t, locationById, floorById)
     const creator = t.created_by ? initialsByUserId.get(t.created_by) : undefined
 
     return {

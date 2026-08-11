@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { resolveFileUrls } from "@/lib/storage"
 import {
   apartmentAncestorId,
-  shortFloorLabel,
+  floorShortLabel,
   type LocationNode,
 } from "@/lib/locations"
 import {
@@ -23,7 +23,7 @@ type JoinedIssue = {
     name: string
     parent_id: string | null
     floor_id: string
-    floor: { id: string; level: number; project_id: string }
+    floor: { id: string; level: number; label: string; kind: string; project_id: string }
   }
 }
 
@@ -57,11 +57,11 @@ export default async function ProjectIssuesPage({
       .from("floors")
       .select("id, level, label")
       .eq("project_id", id)
-      .order("level", { ascending: false }),
+      .order("sort_order"),
     supabase
       .from("issues")
       .select(
-        "id, title, status, created_at, contractor, location_id, location:locations!inner(id, name, parent_id, floor_id, floor:floors!inner(id, level, project_id))"
+        "id, title, status, created_at, contractor, location_id, location:locations!inner(id, name, parent_id, floor_id, floor:floors!inner(id, level, label, kind, project_id))"
       )
       .eq("location.floor.project_id", id)
       .order("created_at", { ascending: false })
@@ -129,7 +129,7 @@ export default async function ProjectIssuesPage({
       contractor: issue.contractor,
       floorId: issue.location.floor_id,
       apartmentId: aptId,
-      locationLabel: `${labelName} · ${shortFloorLabel(issue.location.floor.level)}`,
+      locationLabel: `${labelName} · ${floorShortLabel(issue.location.floor)}`,
       href: `/projects/${id}/floors/${issue.location.floor.level}/${issue.location_id}`,
       thumbUrl: (() => {
         const photo = firstPhotoByIssue.get(issue.id)

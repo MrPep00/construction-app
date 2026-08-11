@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { getProjectTasks } from "@/lib/actions/tasks"
+import { sortFloorsForDisplay } from "@/lib/floors"
 import { type LocationNode } from "@/lib/locations"
-import { buildTaskScope, initialsFromEmail } from "@/lib/tasks/scope"
+import { buildTaskScope, initialsFromEmail, type FloorMeta } from "@/lib/tasks/scope"
 import { ProjectTasksPanelClient } from "./ProjectTasksPanelClient"
 import type { KanbanTask } from "./TaskCard"
 import type { FloorOption, ApartmentOption } from "./TaskForm"
@@ -18,14 +19,19 @@ export async function ProjectTasksSidePanel({ projectId }: Props) {
     supabase.from("projects").select("team_id").eq("id", projectId).single(),
     supabase
       .from("floors")
-      .select("id, level, label")
-      .eq("project_id", projectId)
-      .order("level", { ascending: true }),
+      .select("id, level, label, kind, sort_order")
+      .eq("project_id", projectId),
   ])
 
-  const floors: FloorOption[] = floorsRes.data ?? []
+  // Same visual order as before 023: bottom floor first, zones last
+  const floors: FloorOption[] = sortFloorsForDisplay(
+    floorsRes.data ?? [],
+    "bottomFirst"
+  )
   const floorIds = floors.map((f) => f.id)
-  const floorLevelById = new Map(floors.map((f) => [f.id, f.level]))
+  const floorById = new Map<string, FloorMeta>(
+    (floorsRes.data ?? []).map((f) => [f.id, f])
+  )
 
   const { data: locationsData } =
     floorIds.length > 0
@@ -59,7 +65,7 @@ export async function ProjectTasksSidePanel({ projectId }: Props) {
   }
 
   const cardTasks: KanbanTask[] = tasks.map((t) => {
-    const scope = buildTaskScope(t, locationById, floorLevelById)
+    const scope = buildTaskScope(t, locationById, floorById)
     const creator = t.created_by ? initialsByUserId.get(t.created_by) : undefined
     return {
       id: t.id,

@@ -29,3 +29,11 @@ export function shortFloorLabel(level: number): string {
   if (level === 0) return "Parter"
   return `P${level}`
 }
+
+export type FloorLabelInput = { level: number; label: string; kind: string }
+
+/** Zone: label verbatim (zone levels are reserved-range identifiers, not display).
+ *  Floor: compact P3/Parter/Dach. */
+export function floorShortLabel(floor: FloorLabelInput): string {
+  return floor.kind === "zone" ? floor.label : shortFloorLabel(floor.level)
+}

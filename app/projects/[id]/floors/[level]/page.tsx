@@ -19,7 +19,9 @@ export default async function FloorPage({
   const { id, level: levelStr } = await params
   const level = parseInt(levelStr, 10)
 
-  if (isNaN(level) || level < -2 || level > 7) return notFound()
+  // No range check: zones use reserved negative levels (-100, -101, ...);
+  // unknown levels 404 via the floor lookup below
+  if (isNaN(level)) return notFound()
 
   const supabase = await createClient()
 
