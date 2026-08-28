@@ -2,13 +2,14 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
 import { ChevronDownIcon, ImageIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { resolveIssue, reopenIssue, deleteIssue } from "@/lib/actions/issues"
 import { StatusBadge } from "./StatusBadge"
+import { IssueThumb } from "./IssueThumb"
 import { IssueForm } from "./IssueForm"
+import { Lightbox } from "@/components/upload/Lightbox"
 import {
   Dialog,
   DialogContent,
@@ -141,6 +142,7 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
     () => new Map()
   )
   const [dialog, setDialog] = useState<DialogState>(null)
+  const [lightboxIssue, setLightboxIssue] = useState<IssueRow | null>(null)
   const [expandedSections, setExpandedSections] = useState<Set<IssueStatus>>(
     () => new Set<IssueStatus>(["open"])
   )
@@ -235,31 +237,19 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
 
               {expanded && (
                 <ul className="divide-y border-t">
-                  {group.map((issue) => {
-                    const thumb = issue.photos.find((p) => p.url)
-                    return (
+                  {group.map((issue) => (
                     <li key={issue.id} className="px-3 py-2.5">
-                      <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start justify-between gap-2.5">
+                        <IssueThumb
+                          photos={issue.photos}
+                          issueTitle={issue.title}
+                          onOpen={() => setLightboxIssue(issue)}
+                        />
                         <button
                           type="button"
-                          className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                          className="min-w-0 flex-1 text-left"
                           onClick={() => setDialog({ type: "detail", issue })}
                         >
-                          {thumb?.url ? (
-                            <span className="relative size-16 shrink-0 overflow-hidden rounded-lg">
-                              <Image
-                                src={thumb.url}
-                                alt=""
-                                fill
-                                sizes="64px"
-                                className="object-cover"
-                              />
-                            </span>
-                          ) : (
-                            <span className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground/60">
-                              <ImageIcon className="size-6" />
-                            </span>
-                          )}
                           <div className="min-w-0 flex-1">
                             <p className="mb-0.5 text-sm font-medium leading-snug hover:text-primary">
                               {issue.title}
@@ -295,14 +285,22 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
                         </div>
                       </div>
                     </li>
-                    )
-                  })}
+                  ))}
                 </ul>
               )}
             </section>
           )
         })}
       </div>
+
+      {lightboxIssue && (
+        <Lightbox
+          images={lightboxIssue.photos.flatMap((p) =>
+            p.url ? [{ src: p.url, filename: p.name, uploadedAt: p.createdAt }] : []
+          )}
+          onClose={() => setLightboxIssue(null)}
+        />
+      )}
 
       {dialog?.type === "detail" && (
         <IssueDetailDialog

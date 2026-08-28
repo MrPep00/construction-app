@@ -5,6 +5,7 @@ export type IssuePhoto = {
   id: string
   name: string
   url: string | null
+  createdAt: string
 }
 
 /**
@@ -21,7 +22,7 @@ export async function fetchIssuePhotos(
 
   const { data } = await supabase
     .from("files")
-    .select("id, issue_id, name, storage_path, storage_provider")
+    .select("id, issue_id, name, storage_path, storage_provider, created_at")
     .in("issue_id", issueIds)
     .like("mime_type", "image/%")
     .order("created_at", { ascending: true })
@@ -40,7 +41,12 @@ export async function fetchIssuePhotos(
   files.forEach((f) => {
     if (!f.issue_id) return
     const list = byIssue.get(f.issue_id) ?? []
-    list.push({ id: f.id, name: f.name, url: urls.get(f.storage_path) ?? null })
+    list.push({
+      id: f.id,
+      name: f.name,
+      url: urls.get(f.storage_path) ?? null,
+      createdAt: f.created_at,
+    })
     byIssue.set(f.issue_id, list)
   })
   return byIssue

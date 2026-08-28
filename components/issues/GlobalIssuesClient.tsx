@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import Image from "next/image"
-import { ImageIcon, Trash2Icon } from "lucide-react"
+import { Trash2Icon } from "lucide-react"
 import { formatDistanceToNowStrict } from "date-fns"
 import { pl } from "date-fns/locale"
 import { toast } from "sonner"
@@ -14,6 +13,8 @@ import type { IssuePhoto } from "@/lib/issue-photos"
 import { resolveIssue, reopenIssue, deleteIssue } from "@/lib/actions/issues"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "./StatusBadge"
+import { IssueThumb } from "./IssueThumb"
+import { Lightbox } from "@/components/upload/Lightbox"
 import { DeleteIssueDialog, type PhotoAction } from "./DeleteIssueDialog"
 import {
   Select,
@@ -111,6 +112,7 @@ export function GlobalIssuesClient({
 
   // Local copy for optimistic status toggles; resyncs when server data refreshes
   const [items, setItems] = useState(rows)
+  const [lightboxRow, setLightboxRow] = useState<GlobalIssueRow | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<GlobalIssueRow | null>(null)
   // Optimistically removed rows, filtered out until the post-delete refresh lands
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set())
@@ -303,9 +305,7 @@ export function GlobalIssuesClient({
         </div>
       ) : (
         <ul className="flex flex-col gap-2">
-          {filtered.map((row) => {
-            const thumb = row.photos.find((p) => p.url)
-            return (
+          {filtered.map((row) => (
             <li
               key={row.id}
               className="flex items-stretch gap-3 rounded-xl border border-border bg-card p-3"
@@ -314,21 +314,11 @@ export function GlobalIssuesClient({
                 href={row.href}
                 className="-m-3 flex min-w-0 flex-1 items-center gap-3 rounded-l-xl p-3 transition-colors hover:bg-muted"
               >
-                {thumb?.url ? (
-                  <span className="relative size-16 shrink-0 overflow-hidden rounded-lg">
-                    <Image
-                      src={thumb.url}
-                      alt=""
-                      fill
-                      sizes="64px"
-                      className="object-cover"
-                    />
-                  </span>
-                ) : (
-                  <span className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground/60">
-                    <ImageIcon className="size-6" />
-                  </span>
-                )}
+                <IssueThumb
+                  photos={row.photos}
+                  issueTitle={row.title}
+                  onOpen={() => setLightboxRow(row)}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{row.title}</p>
                   <p className="truncate text-sm text-muted-foreground">
@@ -368,8 +358,7 @@ export function GlobalIssuesClient({
                 </Button>
               </div>
             </li>
-            )
-          })}
+          ))}
         </ul>
       )}
 
@@ -379,6 +368,15 @@ export function GlobalIssuesClient({
             Pokaż więcej
           </Button>
         </div>
+      )}
+
+      {lightboxRow && (
+        <Lightbox
+          images={lightboxRow.photos.flatMap((p) =>
+            p.url ? [{ src: p.url, filename: p.name, uploadedAt: p.createdAt }] : []
+          )}
+          onClose={() => setLightboxRow(null)}
+        />
       )}
 
       {deleteTarget && (
