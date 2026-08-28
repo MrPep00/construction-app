@@ -84,6 +84,7 @@ export function IssueForm(props: Props) {
           contractor: contractor || null,
           status: "open",
           created_at: new Date().toISOString(),
+          photos: [],
         })
 
         const result = await createIssue({
@@ -106,6 +107,7 @@ export function IssueForm(props: Props) {
           contractor: contractor || null,
           status: "open",
           created_at: new Date().toISOString(),
+          photos: [],
         })
         for (const file of selectedFiles) {
           const fd = new FormData()

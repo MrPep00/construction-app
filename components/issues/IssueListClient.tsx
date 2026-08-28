@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
-import { ChevronDownIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import Image from "next/image"
+import { ChevronDownIcon, ImageIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { resolveIssue, reopenIssue, deleteIssue } from "@/lib/actions/issues"
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import type { IssueStatus } from "@/lib/types/db"
+import type { IssuePhoto } from "@/lib/issue-photos"
 
 export type IssueRow = {
   id: string
@@ -26,9 +27,9 @@ export type IssueRow = {
   contractor: string | null
   status: IssueStatus
   created_at: string
+  /** Ordered (created_at asc), URLs pre-resolved server-side */
+  photos: IssuePhoto[]
 }
-
-type Photo = { id: string; signedUrl: string; name: string }
 
 type DialogState =
   | { type: "detail"; issue: IssueRow }
@@ -58,25 +59,7 @@ function IssueDetailDialog({
   onClose: () => void
   onEdit: () => void
 }) {
-  const [photos, setPhotos] = useState<Photo[] | null>(null)
-
-  useState(() => {
-    const supabase = createClient()
-    supabase
-      .from("files")
-      .select("id, name, storage_path")
-      .eq("issue_id", issue.id)
-      .order("created_at")
-      .then(async ({ data }) => {
-        if (!data || data.length === 0) { setPhotos([]); return }
-        const paths = data.map((f) => f.storage_path)
-        const { data: signed } = await supabase.storage
-          .from("files")
-          .createSignedUrls(paths, 3600)
-        const urlMap = new Map(signed?.map(({ path, signedUrl }) => [path, signedUrl]) ?? [])
-        setPhotos(data.map((f) => ({ id: f.id, name: f.name, signedUrl: urlMap.get(f.storage_path) ?? "" })))
-      })
-  })
+  const photos = issue.photos
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
@@ -108,21 +91,28 @@ function IssueDetailDialog({
 
           <div>
             <p className="mb-2 text-xs font-medium text-muted-foreground">Zdjęcia</p>
-            {photos === null ? (
-              <p className="text-xs text-muted-foreground">Ładowanie…</p>
-            ) : photos.length === 0 ? (
+            {photos.length === 0 ? (
               <p className="text-xs text-muted-foreground">Brak zdjęć</p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
-                {photos.map((p) => (
-                  <a key={p.id} href={p.signedUrl} target="_blank" rel="noopener noreferrer">
-                    <img
-                      src={p.signedUrl}
-                      alt={p.name}
-                      className="aspect-square w-full rounded-md object-cover"
-                    />
-                  </a>
-                ))}
+                {photos.map((p) =>
+                  p.url ? (
+                    <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={p.url}
+                        alt={p.name}
+                        className="aspect-square w-full rounded-md object-cover"
+                      />
+                    </a>
+                  ) : (
+                    <span
+                      key={p.id}
+                      className="flex aspect-square w-full items-center justify-center rounded-md bg-muted text-muted-foreground/60"
+                    >
+                      <ImageIcon className="size-5" />
+                    </span>
+                  )
+                )}
               </div>
             )}
           </div>
@@ -245,22 +235,41 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
 
               {expanded && (
                 <ul className="divide-y border-t">
-                  {group.map((issue) => (
+                  {group.map((issue) => {
+                    const thumb = issue.photos.find((p) => p.url)
+                    return (
                     <li key={issue.id} className="px-3 py-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <button
                           type="button"
-                          className="min-w-0 flex-1 text-left"
+                          className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
                           onClick={() => setDialog({ type: "detail", issue })}
                         >
-                          <p className="mb-0.5 text-sm font-medium leading-snug hover:text-primary">
-                            {issue.title}
-                          </p>
-                          {issue.contractor && (
-                            <p className="text-xs text-muted-foreground">{issue.contractor}</p>
+                          {thumb?.url ? (
+                            <span className="relative size-16 shrink-0 overflow-hidden rounded-lg">
+                              <Image
+                                src={thumb.url}
+                                alt=""
+                                fill
+                                sizes="64px"
+                                className="object-cover"
+                              />
+                            </span>
+                          ) : (
+                            <span className="flex size-16 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground/60">
+                              <ImageIcon className="size-6" />
+                            </span>
                           )}
-                          <div className="mt-1">
-                            <span className="text-xs text-muted-foreground">{formatDate(issue.created_at)}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="mb-0.5 text-sm font-medium leading-snug hover:text-primary">
+                              {issue.title}
+                            </p>
+                            {issue.contractor && (
+                              <p className="text-xs text-muted-foreground">{issue.contractor}</p>
+                            )}
+                            <div className="mt-1">
+                              <span className="text-xs text-muted-foreground">{formatDate(issue.created_at)}</span>
+                            </div>
                           </div>
                         </button>
 
@@ -286,7 +295,8 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
                         </div>
                       </div>
                     </li>
-                  ))}
+                    )
+                  })}
                 </ul>
               )}
             </section>

@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { resolveFileUrls } from "@/lib/storage"
+import { fetchIssuePhotos } from "@/lib/issue-photos"
 import { TYPE_ICONS } from "@/components/tree/LocationNode"
 import { FileUploader } from "@/components/upload/FileUploader"
 import { FileGridClient } from "@/components/upload/FileGridClient"
@@ -65,6 +66,16 @@ export default async function LocationPage({
         .eq("location_id", locationId)
         .order("created_at", { ascending: false }),
     ])
+
+  const issues = issuesData ?? []
+  const photosByIssue = await fetchIssuePhotos(
+    supabase,
+    issues.map((i) => i.id)
+  )
+  const issueRows = issues.map((i) => ({
+    ...i,
+    photos: photosByIssue.get(i.id) ?? [],
+  }))
 
   let fileItems: import("@/components/upload/FileGridClient").FileItem[] = []
   if (filesData && filesData.length > 0) {
@@ -154,7 +165,7 @@ export default async function LocationPage({
         {/* RIGHT — sticky issues + tasks panel */}
         <aside className="lg:order-last">
           <LocationSidePanel
-            issues={issuesData ?? []}
+            issues={issueRows}
             tasks={(tasksData ?? []).map((t) => ({ ...t, files: [] }))}
             locationId={locationId}
             projectId={id}

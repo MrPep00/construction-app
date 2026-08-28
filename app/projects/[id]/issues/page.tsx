@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { resolveFileUrls } from "@/lib/storage"
+import { fetchIssuePhotos } from "@/lib/issue-photos"
 import {
   apartmentAncestorId,
   floorShortLabel,
@@ -87,33 +87,10 @@ export default async function ProjectIssuesPage({
     locations.map((l) => [l.id, l])
   )
 
-  // First photo per issue for the 64px row thumb
-  const issueIds = issues.map((i) => i.id)
-  const { data: photosData } =
-    issueIds.length > 0
-      ? await supabase
-          .from("files")
-          .select("issue_id, storage_path, storage_provider, created_at")
-          .in("issue_id", issueIds)
-          .like("mime_type", "image/%")
-          .order("created_at", { ascending: true })
-      : { data: [] }
-
-  const firstPhotoByIssue = new Map<
-    string,
-    { storage_path: string; storage_provider: "supabase" | "r2" }
-  >()
-  const photoCountByIssue = new Map<string, number>()
-  photosData?.forEach((p) => {
-    if (!p.issue_id) return
-    if (!firstPhotoByIssue.has(p.issue_id)) {
-      firstPhotoByIssue.set(p.issue_id, p)
-    }
-    photoCountByIssue.set(p.issue_id, (photoCountByIssue.get(p.issue_id) ?? 0) + 1)
-  })
-  const thumbUrls = await resolveFileUrls(
-    [...firstPhotoByIssue.values()],
-    supabase
+  // All photos per issue (ordered, resolved) — thumb + lightbox + count
+  const photosByIssue = await fetchIssuePhotos(
+    supabase,
+    issues.map((i) => i.id)
   )
 
   const rows: GlobalIssueRow[] = issues.map((issue) => {
@@ -131,11 +108,7 @@ export default async function ProjectIssuesPage({
       apartmentId: aptId,
       locationLabel: `${labelName} · ${floorShortLabel(issue.location.floor)}`,
       href: `/projects/${id}/floors/${issue.location.floor.level}/${issue.location_id}`,
-      thumbUrl: (() => {
-        const photo = firstPhotoByIssue.get(issue.id)
-        return photo ? (thumbUrls.get(photo.storage_path) ?? null) : null
-      })(),
-      photoCount: photoCountByIssue.get(issue.id) ?? 0,
+      photos: photosByIssue.get(issue.id) ?? [],
     }
   })
 

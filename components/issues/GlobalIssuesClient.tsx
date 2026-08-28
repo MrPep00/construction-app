@@ -10,6 +10,7 @@ import { pl } from "date-fns/locale"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { IssueStatus } from "@/lib/types/db"
+import type { IssuePhoto } from "@/lib/issue-photos"
 import { resolveIssue, reopenIssue, deleteIssue } from "@/lib/actions/issues"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "./StatusBadge"
@@ -33,8 +34,8 @@ export type GlobalIssueRow = {
   /** e.g. "M31 · P3" or "Zmiany lokatorskie · P3" */
   locationLabel: string
   href: string
-  thumbUrl: string | null
-  photoCount: number
+  /** Ordered (created_at asc), URLs pre-resolved server-side */
+  photos: IssuePhoto[]
 }
 
 type StatusFilter = "open" | "resolved" | "all"
@@ -158,7 +159,7 @@ export function GlobalIssuesClient({
   }
 
   function requestDelete(row: GlobalIssueRow) {
-    if (row.photoCount === 0) {
+    if (row.photos.length === 0) {
       // FileGridClient pattern: plain confirm when nothing else is at stake
       if (!confirm(`Usunąć usterkę "${row.title}"? Tej operacji nie można cofnąć.`)) return
       performDelete(row, "keep")
@@ -302,7 +303,9 @@ export function GlobalIssuesClient({
         </div>
       ) : (
         <ul className="flex flex-col gap-2">
-          {filtered.map((row) => (
+          {filtered.map((row) => {
+            const thumb = row.photos.find((p) => p.url)
+            return (
             <li
               key={row.id}
               className="flex items-stretch gap-3 rounded-xl border border-border bg-card p-3"
@@ -311,10 +314,10 @@ export function GlobalIssuesClient({
                 href={row.href}
                 className="-m-3 flex min-w-0 flex-1 items-center gap-3 rounded-l-xl p-3 transition-colors hover:bg-muted"
               >
-                {row.thumbUrl ? (
+                {thumb?.url ? (
                   <span className="relative size-16 shrink-0 overflow-hidden rounded-lg">
                     <Image
-                      src={row.thumbUrl}
+                      src={thumb.url}
                       alt=""
                       fill
                       sizes="64px"
@@ -365,7 +368,8 @@ export function GlobalIssuesClient({
                 </Button>
               </div>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
 
@@ -380,7 +384,7 @@ export function GlobalIssuesClient({
       {deleteTarget && (
         <DeleteIssueDialog
           issueTitle={deleteTarget.title}
-          photoCount={deleteTarget.photoCount}
+          photoCount={deleteTarget.photos.length}
           locationLabel={deleteTarget.locationLabel}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={(photoAction) => performDelete(deleteTarget, photoAction)}
