@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react"
 
 export type LightboxImage = {
@@ -81,7 +82,12 @@ export function Lightbox({ images, initialIndex, onClose }: Props) {
 
   if (!current) return null
 
-  return (
+  // Portalled to <body>: any ancestor that creates a stacking context — the
+  // apartment side panel's `lg:sticky` wrapper, for one — would otherwise trap
+  // this `fixed z-[60]` overlay inside it and let a body-level dialog paint on
+  // top. Portalling keeps the overlay a sibling of those dialogs at every call
+  // site, whatever the surrounding layout does.
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/85 p-4"
       onClick={onClose}
@@ -188,6 +194,7 @@ export function Lightbox({ images, initialIndex, onClose }: Props) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
