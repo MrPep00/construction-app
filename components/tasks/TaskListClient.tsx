@@ -80,9 +80,21 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
   )
   const [dialog, setDialog] = useState<DialogState>(null)
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set())
-  const [lightboxFile, setLightboxFile] = useState<FileItem | null>(null)
+  // Scoped to one task: {taskId, index}. Deriving the gallery from the task keeps
+  // prev/next inside that task's attachments — never spanning other tasks.
+  const [lightbox, setLightbox] = useState<{ taskId: string; index: number } | null>(null)
   const [pdfFile, setPdfFile] = useState<FileItem | null>(null)
   const [, startTransition] = useTransition()
+
+  const lightboxImages = lightbox
+    ? (optimisticTasks.find((t) => t.id === lightbox.taskId)?.files ?? [])
+        .filter((f) => f.mime_type.startsWith("image/") && f.signedUrl)
+        .map((f) => ({
+          src: f.signedUrl as string,
+          filename: f.name,
+          uploadedAt: f.created_at,
+        }))
+    : []
 
   function handleToggleDone(task: TaskRow) {
     const newStatus: TaskStatus = task.status === "done" ? "todo" : "done"
@@ -153,6 +165,10 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
                 {group.map((task) => {
                   const isExpanded = expandedTaskIds.has(task.id)
                   const hasFiles = task.files.length > 0
+                  // This task's gallery — prev/next stays inside it
+                  const taskImages = task.files.filter(
+                    (f) => f.mime_type.startsWith("image/") && f.signedUrl
+                  )
                   return (
                     <li
                       key={task.id}
@@ -243,7 +259,12 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
                                   <button
                                     key={file.id}
                                     type="button"
-                                    onClick={() => setLightboxFile(file)}
+                                    onClick={() =>
+                                      setLightbox({
+                                        taskId: task.id,
+                                        index: taskImages.findIndex((f) => f.id === file.id),
+                                      })
+                                    }
                                     className="relative size-16 shrink-0 overflow-hidden rounded-md border hover:opacity-90"
                                     aria-label={`Podgląd: ${file.name}`}
                                   >
@@ -339,12 +360,11 @@ export function TaskListClient({ tasks: initialTasks, projectId, floorId, hideCr
         </Dialog>
       )}
 
-      {lightboxFile && lightboxFile.signedUrl && (
+      {lightboxImages.length > 0 && lightbox && (
         <Lightbox
-          src={lightboxFile.signedUrl}
-          filename={lightboxFile.name}
-          uploadedAt={lightboxFile.created_at}
-          onClose={() => setLightboxFile(null)}
+          images={lightboxImages}
+          initialIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
         />
       )}
 

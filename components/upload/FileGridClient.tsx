@@ -50,14 +50,18 @@ interface Props {
 
 export function FileGridClient({ files, className }: Props) {
   const router = useRouter()
-  const [lightbox, setLightbox] = useState<FileItem | null>(null)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [pdfFile, setPdfFile] = useState<FileItem | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
   function handleDelete(file: FileItem) {
     if (!confirm(`Usunąć plik "${file.name}"? Tej operacji nie można cofnąć.`)) return
-    if (lightbox?.id === file.id) setLightbox(null)
+    // Deleting shifts gallery indices, so close the viewer rather than let it
+    // point at the wrong photo.
+    if (lightboxIndex !== null && file.mime_type.startsWith("image/")) {
+      setLightboxIndex(null)
+    }
     if (pdfFile?.id === file.id) setPdfFile(null)
     setDeletingId(file.id)
 
@@ -72,6 +76,11 @@ export function FileGridClient({ files, className }: Props) {
       }
     })
   }
+
+  // Gallery = the image files of this folder view, in display order.
+  const galleryImages = files.filter(
+    (f) => f.mime_type.startsWith("image/") && f.signedUrl
+  )
 
   if (files.length === 0) {
     return (
@@ -95,7 +104,9 @@ export function FileGridClient({ files, className }: Props) {
                   <button
                     type="button"
                     className="size-full"
-                    onClick={() => setLightbox(file)}
+                    onClick={() =>
+                      setLightboxIndex(galleryImages.findIndex((f) => f.id === file.id))
+                    }
                     aria-label={`Podgląd: ${file.name}`}
                   >
                     <Image
@@ -156,12 +167,15 @@ export function FileGridClient({ files, className }: Props) {
         })}
       </div>
 
-      {lightbox && lightbox.signedUrl && (
+      {lightboxIndex !== null && galleryImages.length > 0 && (
         <Lightbox
-          src={lightbox.signedUrl}
-          filename={lightbox.name}
-          uploadedAt={lightbox.created_at}
-          onClose={() => setLightbox(null)}
+          images={galleryImages.map((f) => ({
+            src: f.signedUrl as string,
+            filename: f.name,
+            uploadedAt: f.created_at,
+          }))}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
         />
       )}
 

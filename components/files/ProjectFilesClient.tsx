@@ -109,7 +109,7 @@ export function ProjectFilesClient({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const [lightbox, setLightbox] = useState<ProjectFileRow | null>(null)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [pdfFile, setPdfFile] = useState<ProjectFileRow | null>(null)
   // Optimistically removed rows; stale ids are harmless after router.refresh
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set())
@@ -118,7 +118,11 @@ export function ProjectFilesClient({
 
   function handleDelete(row: ProjectFileRow) {
     if (!confirm(`Usunąć plik "${row.name}"? Tej operacji nie można cofnąć.`)) return
-    if (lightbox?.id === row.id) setLightbox(null)
+    // Deleting shifts gallery indices, so close the viewer rather than let it
+    // point at the wrong photo.
+    if (lightboxIndex !== null && row.mimeType.startsWith("image/")) {
+      setLightboxIndex(null)
+    }
     if (pdfFile?.id === row.id) setPdfFile(null)
     setDeletingId(row.id)
     setDeletedIds((prev) => new Set(prev).add(row.id))
@@ -143,6 +147,12 @@ export function ProjectFilesClient({
   }
 
   const visibleRows = rows.filter((row) => !deletedIds.has(row.id))
+  // Gallery = exactly the images the user currently sees (server-side category
+  // filter already applied to `rows`), in on-screen order. PDFs and other files
+  // are skipped, so prev/next never lands on something the Lightbox can't show.
+  const galleryImages = visibleRows.filter(
+    (row) => row.mimeType.startsWith("image/") && row.url
+  )
 
   function setCategory(next: VisibleCategory | null) {
     // Category change resets pagination (limit param intentionally dropped)
@@ -163,7 +173,9 @@ export function ProjectFilesClient({
 
   function openFile(row: ProjectFileRow) {
     if (!row.url) return
-    if (row.mimeType.startsWith("image/")) setLightbox(row)
+    if (row.mimeType.startsWith("image/")) {
+      setLightboxIndex(galleryImages.findIndex((r) => r.id === row.id))
+    }
     else if (isPdf({ mime_type: row.mimeType, name: row.name })) setPdfFile(row)
   }
 
@@ -370,12 +382,15 @@ export function ProjectFilesClient({
         )}
       </div>
 
-      {lightbox && lightbox.url && (
+      {lightboxIndex !== null && galleryImages.length > 0 && (
         <Lightbox
-          src={lightbox.url}
-          filename={lightbox.name}
-          uploadedAt={lightbox.createdAt}
-          onClose={() => setLightbox(null)}
+          images={galleryImages.map((row) => ({
+            src: row.url as string,
+            filename: row.name,
+            uploadedAt: row.createdAt,
+          }))}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
         />
       )}
 

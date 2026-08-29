@@ -9,22 +9,19 @@ export type LightboxImage = {
   uploadedAt?: string
 }
 
-type SingleProps = { src: string; filename: string; uploadedAt: string }
-type GalleryProps = { images: LightboxImage[]; initialIndex?: number }
-type Props = (SingleProps | GalleryProps) & { onClose: () => void }
+type Props = {
+  images: LightboxImage[]
+  initialIndex?: number
+  onClose: () => void
+}
 
-export function Lightbox(props: Props) {
-  const { onClose } = props
-  const images: LightboxImage[] =
-    "images" in props
-      ? props.images
-      : [{ src: props.src, filename: props.filename, uploadedAt: props.uploadedAt }]
+/** Gallery viewer. A single-image gallery simply renders no strip and no chevrons. */
+export function Lightbox({ images, initialIndex, onClose }: Props) {
   const count = images.length
 
-  const [index, setIndex] = useState(() => {
-    const initial = "images" in props ? (props.initialIndex ?? 0) : 0
-    return Math.min(Math.max(initial, 0), Math.max(count - 1, 0))
-  })
+  const [index, setIndex] = useState(() =>
+    Math.min(Math.max(initialIndex ?? 0, 0), Math.max(count - 1, 0))
+  )
   const touchStartX = useRef<number | null>(null)
   const thumbRefs = useRef<(HTMLButtonElement | null)[]>([])
   const showStrip = count > 1
@@ -70,9 +67,9 @@ export function Lightbox(props: Props) {
     })
   }, [index, showStrip])
 
-  const current = images[Math.min(index, count - 1)]
+  const current = count > 0 ? images[Math.min(index, count - 1)] : null
 
-  const date = current.uploadedAt
+  const date = current?.uploadedAt
     ? new Date(current.uploadedAt).toLocaleDateString("pl-PL", {
         day: "2-digit",
         month: "2-digit",
@@ -81,6 +78,8 @@ export function Lightbox(props: Props) {
         minute: "2-digit",
       })
     : null
+
+  if (!current) return null
 
   return (
     <div
