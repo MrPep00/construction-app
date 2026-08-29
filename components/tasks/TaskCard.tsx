@@ -18,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { formatCalendarDatePl } from "@/lib/dates"
 
 export type KanbanTask = TaskRow & {
   scopeType: "global" | "floor" | "location"
@@ -41,7 +42,7 @@ export function isTaskOverdue(task: KanbanTask) {
 }
 
 export function formatTaskDue(dateStr: string) {
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("pl-PL", {
+  return formatCalendarDatePl(dateStr, {
     day: "numeric",
     month: "short",
   })

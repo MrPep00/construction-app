@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { updateRequired } from "@/lib/actions/inventory"
 import { MovementForm, type ItemOption, type FloorOption } from "./MovementForm"
+import { formatTimestampPl } from "@/lib/dates"
 
 type LevelCell = { id: string; on_hand: number; required: number }
 
@@ -54,7 +55,7 @@ function palStr(qty: number, palletQty: number): string {
 }
 
 function formatDateTime(dateStr: string) {
-  return new Date(dateStr).toLocaleString("pl-PL", {
+  return formatTimestampPl(new Date(dateStr), {
     day: "numeric",
     month: "short",
     hour: "2-digit",

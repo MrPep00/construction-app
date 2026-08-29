@@ -25,6 +25,7 @@ import {
   VISIBLE_CATEGORIES,
   type VisibleCategory,
 } from "@/lib/files/categories"
+import { formatTimestampPl } from "@/lib/dates"
 
 const PdfViewer = dynamic(
   () => import("@/components/files/PdfViewer").then((m) => m.PdfViewer),
@@ -57,7 +58,7 @@ function formatBytes(bytes: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("pl-PL", {
+  return formatTimestampPl(new Date(dateStr), {
     day: "numeric",
     month: "short",
     year: "numeric",

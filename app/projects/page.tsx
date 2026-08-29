@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card"
 import { DeleteProjectButton } from "./delete-project-button"
 import { LobbyBar } from "@/components/app-shell/LobbyBar"
+import { formatTimestampPl } from "@/lib/dates"
 
 export default async function ProjectsPage() {
   const supabase = await createClient()
@@ -48,7 +49,7 @@ export default async function ProjectsPage() {
                       </Link>
                     </CardTitle>
                     <CardDescription className="mt-1">
-                      {new Date(project.created_at).toLocaleDateString("pl-PL", {
+                      {formatTimestampPl(new Date(project.created_at), {
                         day: "numeric",
                         month: "long",
                         year: "numeric",

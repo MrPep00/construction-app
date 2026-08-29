@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { formatTimestampPl } from "@/lib/dates"
 
 export type NoteRow = {
   id: string
@@ -53,7 +54,7 @@ interface Props {
 type NoteAction = { type: "add"; note: NoteRow } | { type: "remove"; id: string }
 
 function formatDateTime(dateStr: string) {
-  return new Date(dateStr).toLocaleString("pl-PL", {
+  return formatTimestampPl(new Date(dateStr), {
     day: "numeric",
     month: "short",
     year: "numeric",

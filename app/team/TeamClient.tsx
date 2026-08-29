@@ -19,9 +19,10 @@ import {
   removeMember,
 } from "@/lib/actions/team"
 import type { TeamWithMembers, ActiveInvitation } from "@/lib/actions/team"
+import { formatTimestampPl } from "@/lib/dates"
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pl-PL", {
+  return formatTimestampPl(new Date(iso), {
     day: "numeric",
     month: "long",
     year: "numeric",

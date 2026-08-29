@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import type { TaskStatus } from "@/lib/types/db"
+import { formatCalendarDatePl } from "@/lib/dates"
 
 export type TaskRow = {
   id: string
@@ -53,7 +54,7 @@ const STATUS_SECTIONS: { status: TaskStatus; label: string }[] = [
 ]
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("pl-PL", {
+  return formatCalendarDatePl(dateStr, {
     day: "numeric",
     month: "short",
   })

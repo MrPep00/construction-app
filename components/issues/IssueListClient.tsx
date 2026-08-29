@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button"
 import type { IssueStatus } from "@/lib/types/db"
 import type { IssuePhoto } from "@/lib/issue-photos"
+import { formatTimestampPl } from "@/lib/dates"
 
 export type IssueRow = {
   id: string
@@ -44,7 +45,7 @@ const STATUS_ORDER: Record<IssueStatus, number> = {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("pl-PL", {
+  return formatTimestampPl(new Date(dateStr), {
     day: "numeric",
     month: "short",
     year: "numeric",

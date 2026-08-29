@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react"
+import { formatTimestampPl } from "@/lib/dates"
 
 /** Thumbs rendered on each side of the current photo. */
 const THUMB_WINDOW = 5
@@ -79,7 +80,7 @@ export function Lightbox({ images, initialIndex, onClose }: Props) {
   const current = count > 0 ? images[Math.min(index, count - 1)] : null
 
   const date = current?.uploadedAt
-    ? new Date(current.uploadedAt).toLocaleDateString("pl-PL", {
+    ? formatTimestampPl(new Date(current.uploadedAt), {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",

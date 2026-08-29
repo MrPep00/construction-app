@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { updateRequired, deleteItem } from "@/lib/actions/inventory"
 import { MovementForm, type FloorOption } from "./MovementForm"
+import { formatTimestampPl } from "@/lib/dates"
 
 export type ItemMovement = {
   id: string
@@ -62,7 +63,7 @@ function palStr(qty: number, palletQty: number): string {
 }
 
 function formatDateTime(dateStr: string) {
-  return new Date(dateStr).toLocaleString("pl-PL", {
+  return formatTimestampPl(new Date(dateStr), {
     day: "numeric",
     month: "short",
     year: "numeric",
