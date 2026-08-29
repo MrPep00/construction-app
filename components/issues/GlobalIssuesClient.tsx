@@ -13,8 +13,7 @@ import type { IssuePhoto } from "@/lib/issue-photos"
 import { resolveIssue, reopenIssue, deleteIssue } from "@/lib/actions/issues"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "./StatusBadge"
-import { IssueThumb } from "./IssueThumb"
-import { Lightbox } from "@/components/upload/Lightbox"
+import { IssueAttachmentBadge } from "./IssueAttachmentBadge"
 import { DeleteIssueDialog, type PhotoAction } from "./DeleteIssueDialog"
 import {
   Select,
@@ -112,7 +111,6 @@ export function GlobalIssuesClient({
 
   // Local copy for optimistic status toggles; resyncs when server data refreshes
   const [items, setItems] = useState(rows)
-  const [lightboxRow, setLightboxRow] = useState<GlobalIssueRow | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<GlobalIssueRow | null>(null)
   // Optimistically removed rows, filtered out until the post-delete refresh lands
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set())
@@ -314,19 +312,17 @@ export function GlobalIssuesClient({
                 href={row.href}
                 className="-m-3 flex min-w-0 flex-1 items-center gap-3 rounded-l-xl p-3 transition-colors hover:bg-muted"
               >
-                <IssueThumb
-                  photos={row.photos}
-                  issueTitle={row.title}
-                  onOpen={() => setLightboxRow(row)}
-                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{row.title}</p>
-                  <p className="truncate text-sm text-muted-foreground">
-                    {row.locationLabel} ·{" "}
-                    {formatDistanceToNowStrict(new Date(row.createdAt), {
-                      locale: pl,
-                    })}
-                  </p>
+                  <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+                    <p className="min-w-0 truncate">
+                      {row.locationLabel} ·{" "}
+                      {formatDistanceToNowStrict(new Date(row.createdAt), {
+                        locale: pl,
+                      })}
+                    </p>
+                    <IssueAttachmentBadge count={row.photos.length} />
+                  </div>
                   {row.contractor && (
                     <p className="truncate text-sm text-muted-foreground/80">
                       {row.contractor}
@@ -368,15 +364,6 @@ export function GlobalIssuesClient({
             Pokaż więcej
           </Button>
         </div>
-      )}
-
-      {lightboxRow && (
-        <Lightbox
-          images={lightboxRow.photos.flatMap((p) =>
-            p.url ? [{ src: p.url, filename: p.name, uploadedAt: p.createdAt }] : []
-          )}
-          onClose={() => setLightboxRow(null)}
-        />
       )}
 
       {deleteTarget && (
