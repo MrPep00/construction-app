@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react"
 
+/** Thumbs rendered on each side of the current photo. */
+const THUMB_WINDOW = 5
+
 export type LightboxImage = {
   src: string
   filename: string
@@ -26,6 +29,11 @@ export function Lightbox({ images, initialIndex, onClose }: Props) {
   const touchStartX = useRef<number | null>(null)
   const thumbRefs = useRef<(HTMLButtonElement | null)[]>([])
   const showStrip = count > 1
+  // Only a window of thumbs around the current photo is mounted. Thumbs reuse the
+  // full-size signed URL, so mounting a whole 88-photo strip would pull ~200 MB.
+  // Edges are not padded: photo 1 shows itself plus the next 5, nothing before it.
+  const stripStart = Math.max(0, index - THUMB_WINDOW)
+  const stripEnd = Math.min(count - 1, index + THUMB_WINDOW)
 
   useEffect(() => {
     // Arrows are listened for in the CAPTURE phase: when the Lightbox is opened
@@ -168,29 +176,40 @@ export function Lightbox({ images, initialIndex, onClose }: Props) {
 
         {showStrip && (
           <div
-            className="flex gap-2 overflow-x-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/25"
+            className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             aria-label="Miniatury"
           >
-            {images.map((img, i) => (
-              <button
-                key={`${img.src}-${i}`}
-                type="button"
-                ref={(el) => {
-                  thumbRefs.current[i] = el
-                }}
-                onClick={() => setIndex(i)}
-                aria-label={img.filename}
-                aria-current={i === index}
-                className={
-                  i === index
-                    ? "size-14 shrink-0 overflow-hidden rounded ring-2 ring-white"
-                    : "size-14 shrink-0 overflow-hidden rounded opacity-60 transition-opacity hover:opacity-100"
-                }
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img.src} alt="" className="size-full object-cover" />
-              </button>
-            ))}
+            {images.slice(stripStart, stripEnd + 1).map((img, offset) => {
+              // Absolute index — also the React key, so a sliding window reuses the
+              // <img> nodes it still overlaps instead of remounting (and refetching).
+              const i = stripStart + offset
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  ref={(el) => {
+                    thumbRefs.current[i] = el
+                  }}
+                  onClick={() => setIndex(i)}
+                  aria-label={img.filename}
+                  aria-current={i === index}
+                  className={
+                    i === index
+                      ? "size-14 shrink-0 overflow-hidden rounded ring-2 ring-white"
+                      : "size-14 shrink-0 overflow-hidden rounded opacity-60 transition-opacity hover:opacity-100"
+                  }
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={img.src}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="size-full object-cover"
+                  />
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
