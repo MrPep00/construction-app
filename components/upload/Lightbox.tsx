@@ -26,16 +26,49 @@ export function Lightbox(props: Props) {
     return Math.min(Math.max(initial, 0), Math.max(count - 1, 0))
   })
   const touchStartX = useRef<number | null>(null)
+  const thumbRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const showStrip = count > 1
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
+    // Arrows are listened for in the CAPTURE phase: when the Lightbox is opened
+    // from inside a Base UI dialog, that dialog stops keydown propagation while
+    // focus is trapped in its popup, so a bubble-phase listener never sees them.
+    const onNav = (e: KeyboardEvent) => {
+      const t = e.target
+      // Never steal arrows from a focused text field behind the overlay.
+      if (
+        t instanceof HTMLElement &&
+        (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))
+      ) {
+        return
+      }
       if (e.key === "ArrowLeft") setIndex((i) => Math.max(i - 1, 0))
       if (e.key === "ArrowRight") setIndex((i) => Math.min(i + 1, count - 1))
     }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
+    // Escape stays in the bubble phase on purpose. A dialog that swallows the key
+    // closes the Lightbox itself, which keeps the ordering "first Escape closes
+    // the Lightbox, second closes the dialog".
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onNav, true)
+    window.addEventListener("keydown", onEsc)
+    return () => {
+      window.removeEventListener("keydown", onNav, true)
+      window.removeEventListener("keydown", onEsc)
+    }
   }, [onClose, count])
+
+  // Keep the active thumbnail centred in the strip whichever way the index moved
+  // (keys, chevrons, swipe, thumb click). block:"nearest" so the page never jumps.
+  useEffect(() => {
+    if (!showStrip) return
+    thumbRefs.current[index]?.scrollIntoView({
+      inline: "center",
+      block: "nearest",
+      behavior: "smooth",
+    })
+  }, [index, showStrip])
 
   const current = images[Math.min(index, count - 1)]
 
@@ -51,7 +84,7 @@ export function Lightbox(props: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/85 p-4"
+      className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/85 p-4"
       onClick={onClose}
     >
       <div
@@ -82,7 +115,11 @@ export function Lightbox(props: Props) {
         <img
           src={current.src}
           alt={current.filename}
-          className="max-h-[80vh] w-full rounded object-contain"
+          className={
+            showStrip
+              ? "max-h-[70vh] w-full rounded object-contain"
+              : "max-h-[80vh] w-full rounded object-contain"
+          }
         />
 
         {count > 1 && (
@@ -116,13 +153,41 @@ export function Lightbox(props: Props) {
               {date}
             </>
           )}
-          {count > 1 && (
+          {showStrip && (
             <>
               {" · "}
               {index + 1} / {count}
             </>
           )}
         </p>
+
+        {showStrip && (
+          <div
+            className="flex gap-2 overflow-x-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/25"
+            aria-label="Miniatury"
+          >
+            {images.map((img, i) => (
+              <button
+                key={`${img.src}-${i}`}
+                type="button"
+                ref={(el) => {
+                  thumbRefs.current[i] = el
+                }}
+                onClick={() => setIndex(i)}
+                aria-label={img.filename}
+                aria-current={i === index}
+                className={
+                  i === index
+                    ? "size-14 shrink-0 overflow-hidden rounded ring-2 ring-white"
+                    : "size-14 shrink-0 overflow-hidden rounded opacity-60 transition-opacity hover:opacity-100"
+                }
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.src} alt="" className="size-full object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

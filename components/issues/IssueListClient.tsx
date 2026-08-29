@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { resolveIssue, reopenIssue, deleteIssue } from "@/lib/actions/issues"
 import { StatusBadge } from "./StatusBadge"
 import { IssueAttachmentBadge } from "./IssueAttachmentBadge"
+import { Lightbox } from "@/components/upload/Lightbox"
 import { IssueForm } from "./IssueForm"
 import {
   Dialog,
@@ -60,9 +61,39 @@ function IssueDetailDialog({
   onEdit: () => void
 }) {
   const photos = issue.photos
+  // Only photos with a resolved URL are viewable; lightboxIndex indexes THIS list.
+  const viewable = photos.filter((p) => p.url)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+    <>
+    <Dialog
+      open
+      onOpenChange={(open, details) => {
+        if (open) return
+        // Base UI (not Radix): dismissal is cancelled through the change event —
+        // there is no onEscapeKeyDown/onPointerDownOutside. Base UI also stops
+        // propagation of the Escape keydown, so the Lightbox's own window listener
+        // never sees it while the dialog owns the key; the dialog therefore closes
+        // the Lightbox itself. Net effect: 1st Escape closes only the Lightbox,
+        // 2nd closes the dialog.
+        if (lightboxIndex !== null) {
+          if (details.reason === "escape-key") {
+            details.cancel()
+            setLightboxIndex(null)
+            return
+          }
+          // Every click inside the Lightbox (backdrop, chevrons, thumbs) lands
+          // outside the dialog popup. Keep the dialog open and let the Lightbox
+          // decide for itself whether that click means "close".
+          if (details.reason === "outside-press" || details.reason === "focus-out") {
+            details.cancel()
+            return
+          }
+        }
+        onClose()
+      }}
+    >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="pr-6 text-base leading-snug">{issue.title}</DialogTitle>
@@ -97,13 +128,18 @@ function IssueDetailDialog({
               <div className="grid grid-cols-3 gap-2">
                 {photos.map((p) =>
                   p.url ? (
-                    <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer">
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setLightboxIndex(viewable.findIndex((v) => v.id === p.id))}
+                      aria-label={`Otwórz zdjęcie: ${p.name}`}
+                    >
                       <img
                         src={p.url}
                         alt={p.name}
                         className="aspect-square w-full rounded-md object-cover"
                       />
-                    </a>
+                    </button>
                   ) : (
                     <span
                       key={p.id}
@@ -124,6 +160,21 @@ function IssueDetailDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Rendered outside <Dialog> on purpose: DialogContent is transformed, which
+        would make a `fixed` overlay inside it position against the dialog box. */}
+    {lightboxIndex !== null && (
+      <Lightbox
+        images={viewable.map((p) => ({
+          src: p.url as string,
+          filename: p.name,
+          uploadedAt: p.createdAt,
+        }))}
+        initialIndex={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+      />
+    )}
+    </>
   )
 }
 
