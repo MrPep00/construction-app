@@ -4,8 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Trash2Icon } from "lucide-react"
-import { formatDistanceToNowStrict } from "date-fns"
-import { pl } from "date-fns/locale"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { IssueStatus } from "@/lib/types/db"
@@ -13,6 +11,7 @@ import type { IssuePhoto } from "@/lib/issue-photos"
 import { resolveIssue, reopenIssue, deleteIssue } from "@/lib/actions/issues"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "./StatusBadge"
+import { RelativeTime } from "@/components/RelativeTime"
 import { IssueAttachmentBadge } from "./IssueAttachmentBadge"
 import { DeleteIssueDialog, type PhotoAction } from "./DeleteIssueDialog"
 import {
@@ -317,9 +316,7 @@ export function GlobalIssuesClient({
                   <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
                     <p className="min-w-0 truncate">
                       {row.locationLabel} ·{" "}
-                      {formatDistanceToNowStrict(new Date(row.createdAt), {
-                        locale: pl,
-                      })}
+                      <RelativeTime date={row.createdAt} />
                     </p>
                     <IssueAttachmentBadge count={row.photos.length} />
                   </div>

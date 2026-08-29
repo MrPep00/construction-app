@@ -13,17 +13,9 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { markErrorResolved, markErrorUnresolved } from "@/lib/actions/admin-errors"
+import { RelativeTime } from "@/components/RelativeTime"
+import { formatAbsolutePl } from "@/lib/dates"
 import type { ErrorLog } from "@/lib/supabase/admin-context"
-
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const secs = Math.floor(diff / 1000)
-  if (secs < 60) return "przed chwilą"
-  if (secs < 3600) return `${Math.floor(secs / 60)} min temu`
-  if (secs < 86400) return `${Math.floor(secs / 3600)} godz. temu`
-  if (secs < 604800) return `${Math.floor(secs / 86400)} dni temu`
-  return new Date(iso).toLocaleDateString("pl-PL")
-}
 
 const SEVERITY_STYLES = {
   warn: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
@@ -43,7 +35,7 @@ export function ErrorCard({ log }: { log: ErrorLog }) {
   const [note, setNote] = useState("")
   const [isPending, startTransition] = useTransition()
 
-  const absoluteTime = new Date(log.occurred_at).toLocaleString("pl-PL")
+  const absoluteTime = formatAbsolutePl(new Date(log.occurred_at))
 
   function handleResolve() {
     startTransition(async () => {
@@ -81,12 +73,11 @@ export function ErrorCard({ log }: { log: ErrorLog }) {
                 Rozwiązany
               </Badge>
             )}
-            <span
+            <RelativeTime
+              date={log.occurred_at}
+              addSuffix
               className="text-sm font-medium"
-              title={absoluteTime}
-            >
-              {relativeTime(log.occurred_at)}
-            </span>
+            />
             <span className="hidden text-xs text-muted-foreground sm:inline" title={absoluteTime}>
               {absoluteTime}
             </span>
