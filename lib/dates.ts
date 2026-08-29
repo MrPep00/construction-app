@@ -54,3 +54,21 @@ export function formatCalendarDatePl(
   if (Number.isNaN(date.getTime())) return "—"
   return formatter({ ...options, timeZone: "UTC" }).format(date)
 }
+
+const ISO_DAY_OPTIONS: Intl.DateTimeFormatOptions = {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: PROJECT_TIME_ZONE,
+}
+
+/** Today's calendar day in project time, as "YYYY-MM-DD".
+ *  Lets `date` columns (tasks.due_date) be compared as plain strings —
+ *  zero-padded ISO sorts chronologically — so no due date is ever parsed
+ *  into a Date and dragged through the runtime's timezone. */
+export function todayWarsawISO(): string {
+  const parts = formatter(ISO_DAY_OPTIONS).formatToParts(new Date())
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? ""
+  return `${part("year")}-${part("month")}-${part("day")}`
+}

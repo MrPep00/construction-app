@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { formatCalendarDatePl } from "@/lib/dates"
+import { formatCalendarDatePl, todayWarsawISO } from "@/lib/dates"
 
 export type KanbanTask = TaskRow & {
   scopeType: "global" | "floor" | "location"
@@ -36,9 +36,10 @@ export type KanbanTask = TaskRow & {
 
 export function isTaskOverdue(task: KanbanTask) {
   if (!task.due_date || task.status === "done") return false
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return new Date(task.due_date + "T00:00:00") < today
+  // Plain string compare on two "YYYY-MM-DD" values — due_date is a
+  // `date` column and must never be parsed into a Date, which would
+  // reintroduce the runtime's timezone.
+  return task.due_date < todayWarsawISO()
 }
 
 export function formatTaskDue(dateStr: string) {

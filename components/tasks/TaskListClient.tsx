@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import type { TaskStatus } from "@/lib/types/db"
-import { formatCalendarDatePl } from "@/lib/dates"
+import { formatCalendarDatePl, todayWarsawISO } from "@/lib/dates"
 
 export type TaskRow = {
   id: string
@@ -61,7 +61,9 @@ function formatDate(dateStr: string) {
 }
 
 function isOverdue(dateStr: string) {
-  return new Date(dateStr + "T00:00:00") < new Date(new Date().toDateString())
+  // Plain string compare on two "YYYY-MM-DD" values — see isTaskOverdue.
+  // The call site pairs this with a status !== "done" guard.
+  return dateStr < todayWarsawISO()
 }
 
 interface Props {
