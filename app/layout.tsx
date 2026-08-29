@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { ThemeProvider } from "@/components/theme-provider"
 import { OfflineBanner } from "@/components/offline-banner"
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar"
+import { ClientErrorReporter } from "@/components/client-error-reporter"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -55,6 +56,7 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col">
         <ThemeProvider>
+          <ClientErrorReporter />
           <ServiceWorkerRegistrar />
           <OfflineBanner />
           {children}

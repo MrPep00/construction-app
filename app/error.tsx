@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { reportClientError } from "@/lib/logging/report-client-error"
 
 export default function Error({
   error,
@@ -18,18 +19,7 @@ export default function Error({
 
     console.error(error)
 
-    fetch("/api/log-client-error", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: error.message,
-        stack: error.stack,
-        route:
-          typeof window !== "undefined" ? window.location.pathname : undefined,
-      }),
-    }).catch(() => {
-      // Ignore — already console.errored above
-    })
+    reportClientError(error, "error")
   }, [error])
 
   return (

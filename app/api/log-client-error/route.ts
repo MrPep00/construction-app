@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { logError } from "@/lib/logging/log-error"
+import { isNetworkFailureMessage } from "@/lib/logging/network-errors"
 
 const schema = z.object({
   message: z.string().min(1).max(500),
@@ -9,6 +10,11 @@ const schema = z.object({
   context: z.record(z.string(), z.unknown()).optional(),
 })
 
+/** new Error() here captures THIS file's server stack. Reporting that as
+ *  the client's stack put fabricated /var/task frames on entries that
+ *  never ran on the server, which misled diagnosis twice. */
+const NO_CLIENT_STACK = "(no client stack — reconstructed at ingestion)"
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -16,13 +22,23 @@ export async function POST(request: NextRequest) {
 
     if (parsed.success) {
       const err = new Error(parsed.data.message)
-      if (parsed.data.stack) err.stack = parsed.data.stack
+      err.stack = parsed.data.stack ?? NO_CLIENT_STACK
+
+      const context = parsed.data.context as
+        | Record<string, unknown>
+        | undefined
+
+      // A network failure reported while the client was offline is a
+      // connectivity blip, not a fault — keep it out of the error bucket.
+      const offlineBlip =
+        context?.online === false && isNetworkFailureMessage(parsed.data.message)
+
       const userAgent = request.headers.get("user-agent") ?? undefined
       await logError({
         error: err,
         route: parsed.data.route,
-        context: parsed.data.context as Record<string, unknown> | undefined,
-        severity: "error",
+        context,
+        severity: offlineBlip ? "warn" : "error",
         userAgent,
       })
     }
