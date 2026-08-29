@@ -176,40 +176,45 @@ export function Lightbox({ images, initialIndex, onClose }: Props) {
 
         {showStrip && (
           <div
-            className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             aria-label="Miniatury"
           >
-            {images.slice(stripStart, stripEnd + 1).map((img, offset) => {
-              // Absolute index — also the React key, so a sliding window reuses the
-              // <img> nodes it still overlaps instead of remounting (and refetching).
-              const i = stripStart + offset
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  ref={(el) => {
-                    thumbRefs.current[i] = el
-                  }}
-                  onClick={() => setIndex(i)}
-                  aria-label={img.filename}
-                  aria-current={i === index}
-                  className={
-                    i === index
-                      ? "size-14 shrink-0 overflow-hidden rounded ring-2 ring-white"
-                      : "size-14 shrink-0 overflow-hidden rounded opacity-60 transition-opacity hover:opacity-100"
-                  }
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={img.src}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    className="size-full object-cover"
-                  />
-                </button>
-              )
-            })}
+            {/* w-max + mx-auto: the group centres while it fits, and falls back to
+                normal left-origin scrolling once it overflows. justify-center on the
+                scroll container would instead make the left edge unreachable. */}
+            <div className="mx-auto flex w-max gap-2">
+              {images.slice(stripStart, stripEnd + 1).map((img, offset) => {
+                // Absolute index — also the React key, so a sliding window reuses the
+                // <img> nodes it still overlaps instead of remounting (and refetching).
+                const i = stripStart + offset
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    ref={(el) => {
+                      thumbRefs.current[i] = el
+                    }}
+                    onClick={() => setIndex(i)}
+                    aria-label={img.filename}
+                    aria-current={i === index}
+                    className={
+                      i === index
+                        ? "size-14 shrink-0 overflow-hidden rounded ring-2 ring-white"
+                        : "size-14 shrink-0 overflow-hidden rounded opacity-60 transition-opacity hover:opacity-100"
+                    }
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={img.src}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="size-full object-cover"
+                    />
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>
