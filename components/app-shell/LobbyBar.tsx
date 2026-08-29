@@ -51,9 +51,7 @@ export async function LobbyBar() {
               </Link>
             </>
           )}
-          <div className="w-11">
-            <ThemeToggle collapsed />
-          </div>
+          <ThemeToggle />
           <SignOutButton />
         </div>
       </div>

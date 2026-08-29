@@ -13,9 +13,11 @@ const OPTIONS = [
 
 interface Props {
   collapsed?: boolean
+  /** "compact" = icon-only segments (fits a narrow rail), "labeled" = icon + text. */
+  variant?: "compact" | "labeled"
 }
 
-export function ThemeToggle({ collapsed = false }: Props) {
+export function ThemeToggle({ collapsed = false, variant = "labeled" }: Props) {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
@@ -43,6 +45,8 @@ export function ThemeToggle({ collapsed = false }: Props) {
     )
   }
 
+  const compact = variant === "compact"
+
   return (
     <div className="flex rounded-lg border border-border-soft p-0.5" role="radiogroup" aria-label="Motyw">
       {OPTIONS.map(({ value, label, icon: Icon }) => (
@@ -53,15 +57,17 @@ export function ThemeToggle({ collapsed = false }: Props) {
           aria-checked={theme === value}
           onClick={() => setTheme(value)}
           className={cn(
-            "tap-target flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-xs transition-colors",
+            "tap-target flex flex-1 items-center justify-center rounded-md transition-colors",
+            compact ? "min-h-10 min-w-10" : "min-h-10 gap-1.5 px-2 text-xs",
             theme === value
               ? "bg-brand-soft font-medium text-brand"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
           title={label}
+          aria-label={label}
         >
-          <Icon className="size-4" />
-          <span className="sr-only xl:not-sr-only">{label}</span>
+          <Icon className={compact ? "size-5" : "size-4"} />
+          {!compact && <span className="sr-only xl:not-sr-only">{label}</span>}
         </button>
       ))}
     </div>

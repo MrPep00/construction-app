@@ -133,7 +133,7 @@ export function Sidebar({
         )}
 
         <div className={cn("px-1 py-1", collapsed && "px-0")}>
-          <ThemeToggle collapsed={collapsed} />
+          <ThemeToggle collapsed={collapsed} variant="compact" />
         </div>
 
         <div
