@@ -7,9 +7,8 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { resolveIssue, reopenIssue, deleteIssue } from "@/lib/actions/issues"
 import { StatusBadge } from "./StatusBadge"
-import { IssueThumb } from "./IssueThumb"
+import { IssueAttachmentBadge } from "./IssueAttachmentBadge"
 import { IssueForm } from "./IssueForm"
-import { Lightbox } from "@/components/upload/Lightbox"
 import {
   Dialog,
   DialogContent,
@@ -142,7 +141,6 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
     () => new Map()
   )
   const [dialog, setDialog] = useState<DialogState>(null)
-  const [lightboxIssue, setLightboxIssue] = useState<IssueRow | null>(null)
   const [expandedSections, setExpandedSections] = useState<Set<IssueStatus>>(
     () => new Set<IssueStatus>(["open"])
   )
@@ -239,27 +237,24 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
                 <ul className="divide-y border-t">
                   {group.map((issue) => (
                     <li key={issue.id} className="px-3 py-2.5">
-                      <div className="flex items-start justify-between gap-2.5">
-                        <IssueThumb
-                          photos={issue.photos}
-                          issueTitle={issue.title}
-                          onOpen={() => setLightboxIssue(issue)}
-                        />
+                      {/* Text block takes the row; actions sit beside it and wrap
+                          below (basis-40 floor on the text) when the panel is too
+                          narrow for both — never overlap the title. */}
+                      <div className="flex flex-wrap items-start gap-x-2.5 gap-y-1.5">
                         <button
                           type="button"
-                          className="min-w-0 flex-1 text-left"
+                          className="min-w-0 flex-1 basis-40 text-left"
                           onClick={() => setDialog({ type: "detail", issue })}
                         >
-                          <div className="min-w-0 flex-1">
-                            <p className="mb-0.5 text-sm font-medium leading-snug hover:text-primary">
-                              {issue.title}
-                            </p>
-                            {issue.contractor && (
-                              <p className="text-xs text-muted-foreground">{issue.contractor}</p>
-                            )}
-                            <div className="mt-1">
-                              <span className="text-xs text-muted-foreground">{formatDate(issue.created_at)}</span>
-                            </div>
+                          <p className="mb-0.5 break-words text-sm font-medium leading-snug hover:text-primary">
+                            {issue.title}
+                          </p>
+                          {issue.contractor && (
+                            <p className="break-words text-xs text-muted-foreground">{issue.contractor}</p>
+                          )}
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="text-xs text-muted-foreground">{formatDate(issue.created_at)}</span>
+                            <IssueAttachmentBadge count={issue.photos.length} />
                           </div>
                         </button>
 
@@ -292,15 +287,6 @@ export function IssueListClient({ issues: initialIssues, locationId }: Props) {
           )
         })}
       </div>
-
-      {lightboxIssue && (
-        <Lightbox
-          images={lightboxIssue.photos.flatMap((p) =>
-            p.url ? [{ src: p.url, filename: p.name, uploadedAt: p.createdAt }] : []
-          )}
-          onClose={() => setLightboxIssue(null)}
-        />
-      )}
 
       {dialog?.type === "detail" && (
         <IssueDetailDialog
