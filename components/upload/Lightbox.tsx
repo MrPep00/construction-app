@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Image from "next/image"
 import { createPortal } from "react-dom"
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react"
 import { formatTimestampPl } from "@/lib/dates"
@@ -200,17 +201,18 @@ export function Lightbox({ images, initialIndex, onClose }: Props) {
                     aria-current={i === index}
                     className={
                       i === index
-                        ? "size-14 shrink-0 overflow-hidden rounded ring-2 ring-white"
-                        : "size-14 shrink-0 overflow-hidden rounded opacity-60 transition-opacity hover:opacity-100"
+                        ? "relative size-14 shrink-0 overflow-hidden rounded ring-2 ring-white"
+                        : "relative size-14 shrink-0 overflow-hidden rounded opacity-60 transition-opacity hover:opacity-100"
                     }
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    {/* Strip thumbs go through the optimizer — the full-size viewer
+                        above is the only place that pulls the original. */}
+                    <Image
                       src={img.src}
                       alt=""
-                      loading="lazy"
-                      decoding="async"
-                      className="size-full object-cover"
+                      fill
+                      sizes="56px"
+                      className="object-cover"
                     />
                   </button>
                 )

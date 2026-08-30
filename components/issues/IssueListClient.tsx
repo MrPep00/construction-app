@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { ChevronDownIcon, ImageIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { toast } from "sonner"
@@ -134,11 +135,16 @@ function IssueDetailDialog({
                       type="button"
                       onClick={() => setLightboxIndex(viewable.findIndex((v) => v.id === p.id))}
                       aria-label={`Otwórz zdjęcie: ${p.name}`}
+                      className="relative aspect-square w-full overflow-hidden rounded-md"
                     >
-                      <img
+                      {/* Site photos are multi-MB phone originals — go through the
+                          optimizer instead of shipping the full file for a ~100px cell. */}
+                      <Image
                         src={p.url}
                         alt={p.name}
-                        className="aspect-square w-full rounded-md object-cover"
+                        fill
+                        sizes="(max-width: 640px) 33vw, 160px"
+                        className="object-cover"
                       />
                     </button>
                   ) : (
