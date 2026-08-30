@@ -200,7 +200,7 @@ export function UnitDialog({ mode, floorLabel, existingUnits, onClose }: Props) 
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label htmlFor="unit-name" className="text-sm font-medium">
+            <label htmlFor="unit-name" className="block text-sm font-medium">
               Nazwa
             </label>
             <Input
@@ -250,7 +250,7 @@ export function UnitDialog({ mode, floorLabel, existingUnits, onClose }: Props) 
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="unit-matrix-label" className="text-sm font-medium">
+            <label htmlFor="unit-matrix-label" className="block text-sm font-medium">
               Skrót w matrycy
             </label>
             <Input

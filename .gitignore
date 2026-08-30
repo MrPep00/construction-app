@@ -46,3 +46,6 @@ DECISIONS.md
 PROMPTS.md
 /docs/
 MISTAKES.md
+
+# playwright screenshots + cached auth state
+.screenshots/
