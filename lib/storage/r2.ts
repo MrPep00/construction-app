@@ -79,15 +79,31 @@ export async function deleteFromR2(key: string): Promise<void> {
   )
 }
 
+/** Presigned GET URLs end up as the `src` of <Image>. next/image keys its
+ *  optimizer cache on the whole URL string, so a fresh X-Amz-Date on every
+ *  render meant a MISS on every page view — the original (avg 2.4 MB) got
+ *  re-fetched from R2 and re-encoded each time, and the browser cache was
+ *  useless too. Rounding the signing time down to a fixed window makes every
+ *  render inside that window emit a byte-identical URL, so both caches hit. */
+const SIGNING_WINDOW_MS = 30 * 60 * 1000
+const GET_URL_TTL_SECONDS = 7200
+
+/** Signing time rounded down to the window boundary. Worst case — URL minted at
+ *  the start of a window and first used at its end — leaves 7200 - 1800 = 5400s
+ *  (90 min) of validity. */
+function quantizedSigningDate(now: number = Date.now()): Date {
+  return new Date(Math.floor(now / SIGNING_WINDOW_MS) * SIGNING_WINDOW_MS)
+}
+
 export async function getR2SignedUrl(
   key: string,
-  expiresIn = 3600
+  expiresIn = GET_URL_TTL_SECONDS
 ): Promise<string> {
   const client = getClient()
   return getSignedUrl(
     client,
     new GetObjectCommand({ Bucket: getBucket(), Key: key }),
-    { expiresIn }
+    { expiresIn, signingDate: quantizedSigningDate() }
   )
 }
 
