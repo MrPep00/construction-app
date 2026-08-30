@@ -25,6 +25,7 @@ type LocationRow = {
   name: string
   type: string
   sort_order: number
+  matrix_label: string | null
 }
 
 export default async function ProjectDashboardPage({
@@ -57,7 +58,7 @@ export default async function ProjectDashboardPage({
 
   const { data: allLocations } = await supabase
     .from("locations")
-    .select("id, floor_id, parent_id, name, type, sort_order")
+    .select("id, floor_id, parent_id, name, type, sort_order, matrix_label")
     .in("floor_id", floorIds)
 
   const locations: LocationRow[] = allLocations ?? []
@@ -151,6 +152,7 @@ export default async function ProjectDashboardPage({
       .map((l) => ({
         id: l.id,
         name: l.name,
+        matrixLabel: l.matrix_label,
         openCount: openCountByApartment.get(l.id) ?? 0,
       })),
   }))

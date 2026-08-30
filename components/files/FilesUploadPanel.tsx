@@ -115,7 +115,7 @@ export function FilesUploadPanel({
         {!isGlobal && (
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-muted-foreground">
-              Mieszkanie
+              Lokal
             </label>
             <Select
               value={locationId}

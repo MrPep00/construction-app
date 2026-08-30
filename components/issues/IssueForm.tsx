@@ -169,7 +169,7 @@ export function IssueForm(props: Props) {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium">Mieszkanie</label>
+                <label className="text-sm font-medium">Lokal</label>
                 <Select
                   value={targetLocationId || null}
                   onValueChange={(v) => { if (v) setTargetLocationId(v) }}
@@ -183,8 +183,8 @@ export function IssueForm(props: Props) {
                     <SelectValue
                       placeholder={
                         floorApartments.length === 0
-                          ? "Brak mieszkań"
-                          : "Wybierz mieszkanie"
+                          ? "Brak lokali"
+                          : "Wybierz lokal"
                       }
                     />
                   </SelectTrigger>

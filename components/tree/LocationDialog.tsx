@@ -31,7 +31,7 @@ interface Props {
 
 const TITLES: Record<DialogMode["type"], string> = {
   "create-subfolder": "Nowy podfolder",
-  "create-apartment": "Nowe mieszkanie",
+  "create-apartment": "Nowy lokal",
   rename: "Zmień nazwę",
   delete: "Usuń lokalizację",
   "move-to-tenant-changes": "Przenieś do zmian lokatorskich",

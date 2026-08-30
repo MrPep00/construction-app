@@ -8,7 +8,7 @@ Aplikacja PWA do zarządzania inspekcjami budów — usterki, zdjęcia, zadania,
 
 ## Funkcjonalności
 
-- Hierarchia lokalizacji: piętra → Zmiany lokatorskie → mieszkania → pokoje
+- Hierarchia lokalizacji: piętra → Zmiany lokatorskie → lokale → pokoje
 - Upload zdjęć z kamery telefonu i drag&drop plików
 - Lista usterek (defect tracking) z wykonawcami i statusami
 - Zadania globalne i per-piętro z optymistycznym przełączaniem
@@ -126,7 +126,7 @@ Otwórz [http://localhost:3000](http://localhost:3000).
 |---|---|
 | Login | Ekran logowania (magic link) |
 | Pulpit projektu | Lista 10 pięter z licznikami usterek i zadań |
-| Drzewo lokalizacji | Mieszkania i podfoldery z menu kontekstowym |
+| Drzewo lokalizacji | Lokale i podfoldery z menu kontekstowym |
 | Galeria zdjęć | Upload i podgląd zdjęć z lokalizacji |
 
 ---

@@ -94,7 +94,7 @@ export async function createTask(input: {
       })
       .refine(
         (d) => !(d.floorId && d.locationId),
-        "Zadanie nie może mieć jednocześnie piętra i mieszkania"
+        "Zadanie nie może mieć jednocześnie piętra i lokalu"
       )
 
     const parsed = schema.safeParse(input)

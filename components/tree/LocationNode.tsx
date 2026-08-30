@@ -163,7 +163,7 @@ export function LocationNode({
                   })
                 }
               >
-                Dodaj mieszkanie
+                Dodaj lokal
               </DropdownMenuItem>
             )}
             {CAN_ADD_APARTMENT.has(node.type) && !isLocked && (

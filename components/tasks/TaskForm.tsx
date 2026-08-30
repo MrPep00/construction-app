@@ -77,7 +77,7 @@ export function TaskForm(props: Props) {
     if (selectedLocationId) {
       const apt = (props as CreateMode).apartments?.find((a) => a.id === selectedLocationId)
       const floor = (props as CreateMode).floors?.find((f) => f.id === selectedFloorId)
-      return `Zadanie mieszkania ${apt?.name ?? ""} na piętrze ${floor?.label ?? ""}`
+      return `Zadanie lokalu ${apt?.name ?? ""} na piętrze ${floor?.label ?? ""}`
     }
     if (selectedFloorId) {
       const floor = (props as CreateMode).floors?.find((f) => f.id === selectedFloorId)
@@ -209,7 +209,7 @@ export function TaskForm(props: Props) {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Mieszkanie</label>
+                <label className="text-xs text-muted-foreground">Lokal</label>
                 <select
                   value={selectedLocationId}
                   onChange={(e) => setSelectedLocationId(e.target.value)}
@@ -240,7 +240,7 @@ export function TaskForm(props: Props) {
           {showApartmentPicker && (
             <div className="space-y-1">
               <label className="text-sm font-medium text-muted-foreground">
-                Mieszkanie <span className="font-normal">(opcjonalnie)</span>
+                Lokal <span className="font-normal">(opcjonalnie)</span>
               </label>
               <select
                 value={selectedLocationId}

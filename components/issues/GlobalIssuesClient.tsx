@@ -268,7 +268,7 @@ export function GlobalIssuesClient({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>Wszystkie mieszkania</SelectItem>
+            <SelectItem value={ALL}>Wszystkie lokale</SelectItem>
             {apartmentOptions.map((a) => (
               <SelectItem key={a.id} value={a.id}>
                 {a.name}

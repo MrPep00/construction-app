@@ -6,8 +6,21 @@ import { buttonVariants } from "@/components/ui/button"
 export type MatrixApartment = {
   id: string
   name: string
+  /** Short badge from locations.matrix_label; falls back to the full name */
+  matrixLabel: string | null
   openCount: number
 }
+
+/** Matrix cell surface (colors come from getIssueStatusConfig().cellClass).
+ *  Shared with the "Dodaj lokal" form preview so both render identically. */
+export const MATRIX_CELL_CLASS =
+  "flex min-h-11 items-center justify-between gap-1 rounded-lg border px-2.5 py-1.5"
+export const MATRIX_CELL_LABEL_CLASS = "truncate text-sm font-medium"
+
+/** Comfort threshold for a cell label's rendered width (px). The grid track
+ *  is 5.5rem/88px minus 2×10px padding and the count badge, so a label wider
+ *  than this starts crowding the cell. Soft warning only — never a block. */
+export const MATRIX_LABEL_COMFORT_PX = 64
 
 export type MatrixRow = {
   floorId: string
@@ -33,9 +46,9 @@ export function BuildingMatrix({
     return (
       <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
         <div>
-          <p className="font-medium">Brak mieszkań w projekcie</p>
+          <p className="font-medium">Brak lokali w projekcie</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Dodaj mieszkania na piętrach, aby zobaczyć matrycę budynku.
+            Dodaj lokale na piętrach, aby zobaczyć matrycę budynku.
           </p>
         </div>
         <Link
@@ -66,7 +79,7 @@ export function BuildingMatrix({
                 title={
                   row.kind === "zone"
                     ? "usterki w strefie"
-                    : "usterki poza mieszkaniami"
+                    : "usterki poza lokalami"
                 }
                 className="shrink-0 rounded-full bg-status-open-bg px-1.5 py-0.5 text-xs font-semibold tabular-nums text-status-open"
               >
@@ -77,7 +90,7 @@ export function BuildingMatrix({
 
           {row.kind === "zone" ? null : row.apartments.length === 0 ? (
             <div className="flex h-11 flex-1 items-center rounded-lg border border-dashed border-border-soft px-3 text-sm text-muted-foreground/70">
-              Brak mieszkań
+              Brak lokali
             </div>
           ) : (
             <div className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-1.5">
@@ -90,12 +103,13 @@ export function BuildingMatrix({
                     href={`/projects/${projectId}/floors/${row.level}/${apt.id}`}
                     title={apt.name}
                     className={cn(
-                      "flex min-h-11 items-center justify-between gap-1 rounded-lg border px-2.5 py-1.5 transition-opacity hover:opacity-80",
+                      MATRIX_CELL_CLASS,
+                      "transition-opacity hover:opacity-80",
                       cellClass
                     )}
                   >
-                    <span className="truncate text-sm font-medium">
-                      {apt.name}
+                    <span className={MATRIX_CELL_LABEL_CLASS}>
+                      {apt.matrixLabel ?? apt.name}
                     </span>
                     {apt.openCount > 0 && (
                       <span className="text-sm font-semibold tabular-nums">
