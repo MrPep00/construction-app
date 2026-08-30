@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { isAdmin } from "@/lib/auth/admin-check"
 import { resolveFileUrls } from "@/lib/storage"
 import { ZoneActions } from "@/components/floors/ZoneActions"
+import { AddUnitButton } from "@/components/lokale/AddUnitButton"
 import { LocationTabs } from "@/components/tree/LocationTabs"
 import { TaskList } from "@/components/tasks/TaskList"
 import { NotesPanel } from "@/components/notes/NotesPanel"
@@ -49,11 +50,24 @@ export default async function FloorPage({
 
   const { data: locations } = await supabase
     .from("locations")
-    .select("id, parent_id, floor_id, name, type, sort_order")
+    .select("id, parent_id, floor_id, name, type, sort_order, matrix_label, unit_category")
     .eq("floor_id", floor.id)
     .order("sort_order")
 
   const locationIds = locations?.map((l) => l.id) ?? []
+
+  // Units already on this floor — feeds the "Dodaj lokal" suggestions and
+  // its uniqueness warning. The button needs the seeded root folder to file
+  // the unit under, so zones (flat containers) never show it.
+  const existingUnits = (locations ?? [])
+    .filter((l) => l.type === "apartment")
+    .map((l) => ({ id: l.id, name: l.name, matrixLabel: l.matrix_label }))
+  const hasUnitFolder = (locations ?? []).some(
+    (l) =>
+      l.parent_id === null &&
+      l.type === "folder" &&
+      (l.name === "Lokale" || l.name === "Mieszkania")
+  )
   const openIssueCounts: Record<string, number> = {}
 
   if (locationIds.length > 0) {
@@ -106,10 +120,16 @@ export default async function FloorPage({
         <span className="text-foreground">{floor.label}</span>
       </nav>
 
-      <div className="mb-6 flex items-center gap-2">
+      <div className="mb-6 flex flex-wrap items-center gap-2">
         <h1 className="text-2xl font-bold">{floor.label}</h1>
         {floor.kind === "zone" && isAdmin(user?.email) && (
           <ZoneActions floorId={floor.id} projectId={id} label={floor.label} />
+        )}
+        {floor.kind !== "zone" && hasUnitFolder && (
+          <AddUnitButton
+            floorId={floor.id}
+            existingUnits={existingUnits}
+          />
         )}
       </div>
 
