@@ -97,6 +97,24 @@ WHERE l.floor_id = f.id
 
 ---
 
+### `r2-inventory.ts`
+
+**Purpose:** PHASE B of the post-cascade-delete rebuild. Lists the R2 bucket and proposes a recovery target for every object, so Phase C can generate `files` rows from an approved mapping.
+
+**Safety:** STRICTLY READ-ONLY — the only R2 command imported is `ListObjectsV2Command`. No Supabase access at all. Writes only to `backups/` (gitignored).
+
+**How to run:** `pnpm tsx scripts/r2-inventory.ts`
+
+**Outputs:** `backups/r2-mapping-dryrun.md` (review table, also printed to stdout) and `backups/r2-mapping-dryrun.json` (consumed by Phase C).
+
+**Mapping rules:**
+- `{team}/floors/{floorId}/...` → new floor, matched via the six OLD floor UUIDs in the header of `seed-apartments-budynek-A.sql`. Unmatched old floor UUIDs are listed in report section 2b; add them to `EXTRA_FLOOR_TO_LEVEL` at the top of the script once the level is confirmed, then re-run.
+- `{team}/projects/{projectId}/...` → project-level file.
+- `{team}/{locationId}/...` and `{team}/tasks/{taskId}/...` → the old rows are gone, so these are recovered as project-level files, grouped by the old id (`G01`, `G02`, …) to keep each gallery coherent.
+- Category: images → `documentation`; PDFs → `drawing` when floor-mapped, else `documentation`.
+
+---
+
 ### `check-r2-orphans.ts`
 
 Checks for files in the `files` table that no longer have a corresponding object in Cloudflare R2. Run with `npx tsx scripts/check-r2-orphans.ts`. Added during Module 9 (R2 migration).

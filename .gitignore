@@ -49,3 +49,6 @@ MISTAKES.md
 
 # playwright screenshots + cached auth state
 .screenshots/
+
+# post-cascade-delete rebuild working files (contain storage keys + old UUIDs)
+/backups/
