@@ -44,7 +44,7 @@ BEGIN;
 --    Transaction-local (third arg = true): cleared on COMMIT/ROLLBACK.
 -- ============================================================
 
-SELECT set_config('app.project_name', 'Budynek A', true);
+SELECT set_config('app.project_name', 'Budowa 1091, ul.Czysta', true);
 
 -- ============================================================
 -- 1. Pre-flight: 1 project, 6 floors, 6 'Lokale' folders
@@ -196,7 +196,7 @@ COMMIT;
 --    Re-set the name here too - set_config above was transaction-local.
 -- ============================================================
 
-SELECT set_config('app.project_name', 'Budynek A', false);
+SELECT set_config('app.project_name', 'Budowa 1091, ul.Czysta', false);
 
 SELECT
   f.level                                   AS floor,

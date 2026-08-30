@@ -50,7 +50,7 @@ BEGIN;
 -- 0. Target project name.  EDIT THIS LINE.
 -- ============================================================
 
-SELECT set_config('app.project_name', 'Budynek A', true);
+SELECT set_config('app.project_name', 'Budowa 1091, ul.Czysta', true);
 
 -- ============================================================
 -- 1. Pre-flight
@@ -458,7 +458,7 @@ COMMIT;
 --    Re-set the name here too - set_config above was transaction-local.
 -- ============================================================
 
-SELECT set_config('app.project_name', 'Budynek A', false);
+SELECT set_config('app.project_name', 'Budowa 1091, ul.Czysta', false);
 
 SELECT
   COALESCE('level ' || f.level::text, 'project level') AS target,
