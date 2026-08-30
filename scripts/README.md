@@ -64,6 +64,39 @@ WHERE type = 'apartment'
 
 ---
 
+### `rebuild-A-apartments.sql`
+
+**Purpose:** PHASE A of the post-cascade-delete rebuild (2026-08-30). Re-creates the 63 lokale (M1–M63) on floors 1–6 after `projects`/`floors`/`locations`/`issues`/`tasks`/`notes` rows were lost. Portable rewrite of `seed-apartments-budynek-A.sql` — the old hardcoded floor/parent UUIDs died with the data.
+
+**Before running:** edit the `SELECT set_config('app.project_name', 'Budynek A', true);` line near the top to the exact name of the project Gleb created in the app. It appears twice (once transaction-local, once for the post-COMMIT summary) — change both.
+
+**How to run:**
+1. Supabase Dashboard → SQL Editor.
+2. Paste the full file.
+3. Run. Check the result table shows 10/11/11/11/10/10 per level.
+
+**What it does:**
+- Resolves floors by `(project name, level 1..6, kind='floor')` and parents by `(floor_id, name='Lokale', parent_id IS NULL)`.
+- Pre-flight: exactly 1 matching project, 6 floors, 6 `Lokale` root folders — `RAISE EXCEPTION` otherwise.
+- Inserts 63 rows with `type='apartment'`, `unit_category='residential'`, `matrix_label` left NULL.
+- `NOT EXISTS` guard on `(floor_id, parent_id, name)` — safe to re-run.
+- Post-insert assertion inside the transaction; any per-level mismatch rolls the whole thing back.
+
+**Safety:** INSERT only. No DELETE, no UPDATE, no DDL.
+
+**Rollback (if needed):**
+```sql
+DELETE FROM locations l
+USING floors f, projects p
+WHERE l.floor_id = f.id
+  AND f.project_id = p.id
+  AND p.name = 'Budynek A'
+  AND l.type = 'apartment'
+  AND l.name ~ '^M[0-9]+$';
+```
+
+---
+
 ### `check-r2-orphans.ts`
 
 Checks for files in the `files` table that no longer have a corresponding object in Cloudflare R2. Run with `npx tsx scripts/check-r2-orphans.ts`. Added during Module 9 (R2 migration).
