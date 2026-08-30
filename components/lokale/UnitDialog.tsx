@@ -2,6 +2,13 @@
 
 import { useCallback, useId, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import {
+  HomeIcon,
+  PackageIcon,
+  StoreIcon,
+  WrenchIcon,
+  type LucideIcon,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getIssueStatusConfig } from "@/lib/status"
 import {
@@ -23,10 +30,18 @@ import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+
+const CATEGORY_ICONS: Record<UnitCategory, LucideIcon> = {
+  residential: HomeIcon,
+  commercial: StoreIcon,
+  storage: PackageIcon,
+  technical: WrenchIcon,
+}
 
 /** Matrix label already used on this floor (for the uniqueness warning). */
 export type ExistingUnit = {
@@ -47,6 +62,8 @@ export type UnitDialogMode =
 
 interface Props {
   mode: UnitDialogMode
+  /** Compact floor label for the header context line (e.g. "P3") */
+  floorLabel: string
   /** Other units on this floor — feeds suggestions + uniqueness warning
    *  (in edit mode the unit being edited is excluded by the caller) */
   existingUnits: ExistingUnit[]
@@ -57,7 +74,7 @@ function normalize(value: string) {
   return value.trim().toLocaleLowerCase("pl")
 }
 
-export function UnitDialog({ mode, existingUnits, onClose }: Props) {
+export function UnitDialog({ mode, floorLabel, existingUnits, onClose }: Props) {
   const isEdit = mode.kind === "edit"
   const router = useRouter()
   const datalistId = useId()
@@ -178,6 +195,7 @@ export function UnitDialog({ mode, existingUnits, onClose }: Props) {
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edytuj lokal" : "Dodaj lokal"}</DialogTitle>
+          <DialogDescription>{floorLabel} · folder Lokale</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -207,23 +225,27 @@ export function UnitDialog({ mode, existingUnits, onClose }: Props) {
 
           <div className="space-y-1.5">
             <p className="text-sm font-medium">Kategoria</p>
-            <div className="flex flex-wrap gap-2">
-              {UNIT_CATEGORIES.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => handleCategoryChange(value)}
-                  aria-pressed={category === value}
-                  className={cn(
-                    "min-h-11 rounded-full border px-4 text-sm font-medium transition-colors",
-                    category === value
-                      ? "border-brand bg-brand text-on-brand"
-                      : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  {CATEGORY_LABELS[value]}
-                </button>
-              ))}
+            <div className="grid grid-cols-2 gap-2">
+              {UNIT_CATEGORIES.map((value) => {
+                const Icon = CATEGORY_ICONS[value]
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => handleCategoryChange(value)}
+                    aria-pressed={category === value}
+                    className={cn(
+                      "flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-medium leading-tight transition-colors",
+                      category === value
+                        ? "border-brand bg-brand text-on-brand"
+                        : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    <span className="min-w-0">{CATEGORY_LABELS[value]}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -240,7 +262,8 @@ export function UnitDialog({ mode, existingUnits, onClose }: Props) {
               className="h-11 w-32"
             />
             <p className="text-xs text-muted-foreground">
-              Widoczny w matrycy budynku. Pusty skrót = pełna nazwa lokalu.
+              Podpowiadany wg kategorii — możesz wpisać własny (maks.{" "}
+              {MAX_MATRIX_LABEL_LENGTH} znaków).
             </p>
             {duplicate && (
               <p className="text-xs text-status-open">

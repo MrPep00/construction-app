@@ -14,6 +14,8 @@ interface Props {
     category: UnitCategory | null
     matrixLabel: string | null
   }
+  /** Compact floor label for the dialog header (e.g. "P3") */
+  floorLabel: string
   /** Other units on this floor (self excluded) */
   existingUnits: ExistingUnit[]
 }
@@ -21,7 +23,7 @@ interface Props {
 /** Pencil in the location page header — opens the same dialog as "Dodaj
  *  lokal" in edit mode. Units created before migration 024 have no category
  *  in the DB; the dialog falls back to 'residential' (the 024 backfill). */
-export function EditUnitButton({ unit, existingUnits }: Props) {
+export function EditUnitButton({ unit, floorLabel, existingUnits }: Props) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -48,6 +50,7 @@ export function EditUnitButton({ unit, existingUnits }: Props) {
             category: unit.category,
             matrixLabel: unit.matrixLabel,
           }}
+          floorLabel={floorLabel}
           existingUnits={existingUnits}
           onClose={() => setOpen(false)}
         />

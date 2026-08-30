@@ -8,6 +8,7 @@ import { FileUploader } from "@/components/upload/FileUploader"
 import { FileGridClient } from "@/components/upload/FileGridClient"
 import { LocationSidePanel } from "@/components/location/LocationSidePanel"
 import { EditUnitButton } from "@/components/lokale/EditUnitButton"
+import { floorShortLabel } from "@/lib/locations"
 import type { UnitCategory } from "@/lib/types/db"
 
 export default async function LocationPage({
@@ -34,7 +35,7 @@ export default async function LocationPage({
 
   const { data: floor } = await supabase
     .from("floors")
-    .select("id, level, label")
+    .select("id, level, label, kind")
     .eq("project_id", id)
     .eq("level", level)
     .single()
@@ -173,6 +174,7 @@ export default async function LocationPage({
               category: location.unit_category as UnitCategory | null,
               matrixLabel: location.matrix_label,
             }}
+            floorLabel={floorShortLabel(floor)}
             existingUnits={floorUnits}
           />
         )}

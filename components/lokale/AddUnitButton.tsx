@@ -7,11 +7,13 @@ import { UnitDialog, type ExistingUnit } from "./UnitDialog"
 
 interface Props {
   floorId: string
+  /** Compact floor label for the dialog header (e.g. "P3") */
+  floorLabel: string
   existingUnits: ExistingUnit[]
 }
 
 /** "Dodaj lokal" trigger on the floor page. Any team member may add a lokal. */
-export function AddUnitButton({ floorId, existingUnits }: Props) {
+export function AddUnitButton({ floorId, floorLabel, existingUnits }: Props) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -24,6 +26,7 @@ export function AddUnitButton({ floorId, existingUnits }: Props) {
       {open && (
         <UnitDialog
           mode={{ kind: "create", floorId }}
+          floorLabel={floorLabel}
           existingUnits={existingUnits}
           onClose={() => setOpen(false)}
         />

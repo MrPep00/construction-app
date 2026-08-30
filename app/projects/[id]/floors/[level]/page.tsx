@@ -5,6 +5,7 @@ import { isAdmin } from "@/lib/auth/admin-check"
 import { resolveFileUrls } from "@/lib/storage"
 import { ZoneActions } from "@/components/floors/ZoneActions"
 import { AddUnitButton } from "@/components/lokale/AddUnitButton"
+import { floorShortLabel } from "@/lib/locations"
 import { LocationTabs } from "@/components/tree/LocationTabs"
 import { TaskList } from "@/components/tasks/TaskList"
 import { NotesPanel } from "@/components/notes/NotesPanel"
@@ -128,6 +129,7 @@ export default async function FloorPage({
         {floor.kind !== "zone" && hasUnitFolder && (
           <AddUnitButton
             floorId={floor.id}
+            floorLabel={floorShortLabel(floor)}
             existingUnits={existingUnits}
           />
         )}
