@@ -120,3 +120,74 @@ export async function createUnit(input: {
     return { error: "Nie udało się dodać lokalu" }
   }
 }
+
+const updateUnitSchema = z.object({
+  id: z.string().uuid(),
+  name: nameField,
+  category: categoryField,
+  matrixLabel: matrixLabelField,
+})
+
+/** Edits an existing lokal (name / category / matrix label). Same access
+ *  rules as createUnit: RLS decides, no admin check. */
+export async function updateUnit(input: {
+  id: string
+  name: string
+  category: string
+  matrixLabel: string
+}): Promise<{ data?: boolean; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: "Nie zalogowany" }
+
+    const parsed = updateUnitSchema.safeParse(input)
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Nieprawidłowe dane" }
+    }
+    const { id, name, category, matrixLabel } = parsed.data
+
+    const { data: location } = await supabase
+      .from("locations")
+      .select("id, type, floor_id")
+      .eq("id", id)
+      .single()
+
+    if (!location) return { error: "Lokal niedostępny" }
+    if (location.type !== "apartment") return { error: "To nie jest lokal" }
+
+    const { error } = await supabase
+      .from("locations")
+      .update({
+        name,
+        unit_category: category,
+        matrix_label: matrixLabel === "" ? null : matrixLabel,
+      })
+      .eq("id", id)
+
+    if (error) return { error: error.message }
+
+    const { data: floor } = await supabase
+      .from("floors")
+      .select("level, project_id")
+      .eq("id", location.floor_id)
+      .single()
+
+    if (floor) {
+      revalidatePath(`/projects/${floor.project_id}/floors/${floor.level}/${id}`)
+      revalidatePath(`/projects/${floor.project_id}/floors/${floor.level}`)
+      revalidatePath(`/projects/${floor.project_id}`)
+      revalidatePath(`/projects/${floor.project_id}`, "layout")
+    }
+    return { data: true }
+  } catch (error) {
+    await logError({
+      error,
+      actionName: "updateUnit",
+      context: { locationId: input.id },
+    })
+    return { error: "Nie udało się zapisać lokalu" }
+  }
+}

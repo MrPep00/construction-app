@@ -23,7 +23,7 @@ export function AddUnitButton({ floorId, existingUnits }: Props) {
 
       {open && (
         <UnitDialog
-          floorId={floorId}
+          mode={{ kind: "create", floorId }}
           existingUnits={existingUnits}
           onClose={() => setOpen(false)}
         />

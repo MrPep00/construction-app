@@ -17,7 +17,7 @@ import {
   suggestMatrixLabel,
 } from "@/lib/lokale"
 import type { UnitCategory } from "@/lib/types/db"
-import { createUnit } from "@/lib/actions/lokale"
+import { createUnit, updateUnit } from "@/lib/actions/lokale"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -35,9 +35,20 @@ export type ExistingUnit = {
   matrixLabel: string | null
 }
 
+export type UnitDialogMode =
+  | { kind: "create"; floorId: string }
+  | {
+      kind: "edit"
+      id: string
+      name: string
+      category: UnitCategory | null
+      matrixLabel: string | null
+    }
+
 interface Props {
-  floorId: string
-  /** Units already on this floor — feeds suggestions + uniqueness warning */
+  mode: UnitDialogMode
+  /** Other units on this floor — feeds suggestions + uniqueness warning
+   *  (in edit mode the unit being edited is excluded by the caller) */
   existingUnits: ExistingUnit[]
   onClose: () => void
 }
@@ -46,7 +57,8 @@ function normalize(value: string) {
   return value.trim().toLocaleLowerCase("pl")
 }
 
-export function UnitDialog({ floorId, existingUnits, onClose }: Props) {
+export function UnitDialog({ mode, existingUnits, onClose }: Props) {
+  const isEdit = mode.kind === "edit"
   const router = useRouter()
   const datalistId = useId()
 
@@ -58,14 +70,24 @@ export function UnitDialog({ floorId, existingUnits, onClose }: Props) {
     [existingUnits]
   )
 
-  const [name, setName] = useState("")
-  const [category, setCategory] = useState<UnitCategory>("residential")
-  const [matrixLabel, setMatrixLabel] = useState(() =>
-    suggestMatrixLabel("residential", "", existingLabels)
+  const initialCategory: UnitCategory = isEdit
+    ? (mode.category ?? "residential")
+    : "residential"
+  const initialName = isEdit ? mode.name : ""
+
+  const [name, setName] = useState(initialName)
+  const [category, setCategory] = useState<UnitCategory>(initialCategory)
+  const [matrixLabel, setMatrixLabel] = useState(
+    () =>
+      (isEdit ? mode.matrixLabel : null) ??
+      suggestMatrixLabel(initialCategory, initialName, existingLabels)
   )
   /** True once the user edits the field; a cleared field goes back to false
-   *  so the suggestion returns on blur / category change. */
-  const [labelTouched, setLabelTouched] = useState(false)
+   *  so the suggestion returns on blur / category change. A label saved
+   *  earlier counts as set, so editing never overwrites it silently. */
+  const [labelTouched, setLabelTouched] = useState(
+    () => isEdit && !!mode.matrixLabel
+  )
   const [labelWidth, setLabelWidth] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -124,12 +146,19 @@ export function UnitDialog({ floorId, existingUnits, onClose }: Props) {
   function handleSubmit() {
     setError(null)
     startTransition(async () => {
-      const result = await createUnit({
-        floorId,
-        name: name.trim(),
-        category,
-        matrixLabel: trimmedLabel,
-      })
+      const result = mode.kind === "edit"
+        ? await updateUnit({
+            id: mode.id,
+            name: name.trim(),
+            category,
+            matrixLabel: trimmedLabel,
+          })
+        : await createUnit({
+            floorId: mode.floorId,
+            name: name.trim(),
+            category,
+            matrixLabel: trimmedLabel,
+          })
       if (result.error) {
         setError(result.error)
         return
@@ -148,7 +177,7 @@ export function UnitDialog({ floorId, existingUnits, onClose }: Props) {
     >
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Dodaj lokal</DialogTitle>
+          <DialogTitle>{isEdit ? "Edytuj lokal" : "Dodaj lokal"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -256,7 +285,7 @@ export function UnitDialog({ floorId, existingUnits, onClose }: Props) {
             onClick={handleSubmit}
             disabled={isPending || name.trim() === ""}
           >
-            {isPending ? "Zapisywanie..." : "Dodaj lokal"}
+            {isPending ? "Zapisywanie..." : isEdit ? "Zapisz" : "Dodaj lokal"}
           </Button>
         </DialogFooter>
       </DialogContent>

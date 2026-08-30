@@ -7,6 +7,8 @@ import { TYPE_ICONS } from "@/components/tree/LocationNode"
 import { FileUploader } from "@/components/upload/FileUploader"
 import { FileGridClient } from "@/components/upload/FileGridClient"
 import { LocationSidePanel } from "@/components/location/LocationSidePanel"
+import { EditUnitButton } from "@/components/lokale/EditUnitButton"
+import type { UnitCategory } from "@/lib/types/db"
 
 export default async function LocationPage({
   params,
@@ -41,7 +43,7 @@ export default async function LocationPage({
 
   const { data: location } = await supabase
     .from("locations")
-    .select("id, name, type, parent_id")
+    .select("id, name, type, parent_id, matrix_label, unit_category")
     .eq("id", locationId)
     .eq("floor_id", floor.id)
     .single()
@@ -111,6 +113,23 @@ export default async function LocationPage({
 
   const icon = TYPE_ICONS[location.type] ?? "📁"
 
+  // Other units on this floor — the edit dialog needs them for its matrix
+  // label suggestion and uniqueness warning
+  let floorUnits: { id: string; name: string; matrixLabel: string | null }[] = []
+  if (location.type === "apartment") {
+    const { data: units } = await supabase
+      .from("locations")
+      .select("id, name, matrix_label")
+      .eq("floor_id", floor.id)
+      .eq("type", "apartment")
+      .neq("id", locationId)
+    floorUnits = (units ?? []).map((u) => ({
+      id: u.id,
+      name: u.name,
+      matrixLabel: u.matrix_label,
+    }))
+  }
+
   return (
     <main className="px-4 py-6 md:px-6 lg:px-10">
       <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
@@ -146,6 +165,17 @@ export default async function LocationPage({
       <h1 className="mb-6 flex items-center gap-2 text-2xl font-bold">
         <span>{icon}</span>
         <span>{location.name}</span>
+        {location.type === "apartment" && (
+          <EditUnitButton
+            unit={{
+              id: location.id,
+              name: location.name,
+              category: location.unit_category as UnitCategory | null,
+              matrixLabel: location.matrix_label,
+            }}
+            existingUnits={floorUnits}
+          />
+        )}
       </h1>
 
       <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
