@@ -52,14 +52,17 @@ const OLD_FLOOR_TO_LEVEL: Record<string, number> = {
   "ecf158d9-d8f8-4024-a38d-f0325ee21f67": 6,
 }
 
-// Old floor UUIDs OUTSIDE the six from the seed header (levels -2/-1/0/7 and
-// zones) are not recoverable from any committed file. Section 7 of the report
-// lists them with their filenames — the drawing names ("parter", "pi_tro_-2")
-// usually say which level they are. Gleb reads that section, states the level,
-// and it gets added here; re-running then maps those keys to a real floor
-// instead of dumping them at project level. Empty until he confirms — the
-// script never guesses a level from a filename on its own.
-const EXTRA_FLOOR_TO_LEVEL: Record<string, number> = {}
+// Old floor UUIDs OUTSIDE the six in the seed header (levels -2/-1/0/7 and
+// zones) appear in no committed file. Report section 2b lists them with their
+// filenames — the drawing names ("parter", "pi_tro_-2") say which level they
+// are, but the script never infers a level on its own: a human confirms and
+// the pair is recorded here. Confirmed by Gleb 2026-08-30.
+const EXTRA_FLOOR_TO_LEVEL: Record<string, number> = {
+  "1399c759-02c7-4bcc-b2ae-947f9653096d": 0, // rzut_parteru, parter_went/co/wod-kan
+  "1c480e3c-77c3-4139-8657-0bc4135e6b26": -2, // gara_-2, fundamenty, pi_tro_-2
+  "28fb4152-3776-446c-a86c-e610155177a9": -1, // gara_-1, pi_tro_-1 went/co/wod-kan
+  "c30b485c-24f9-48f2-a62f-92bd3170a633": 7, // rzut_dachu, dach_went/wod-kan
+}
 
 function levelForOldFloor(oldId: string): number | undefined {
   return EXTRA_FLOOR_TO_LEVEL[oldId] ?? OLD_FLOOR_TO_LEVEL[oldId]
@@ -188,7 +191,10 @@ type Mapping = Parsed & {
   mime: string
   target: Target
   category: "drawing" | "documentation"
-  group: string | null // old-location / old-task grouping label
+  group: string | null // old-location (G##) / old-task (T##) grouping label
+  /** What goes into files.name. Grouped recoveries carry their group prefix so
+   *  the flat project-level gallery still reads per dead lokal. */
+  recoveredName: string
   note: string
 }
 
@@ -201,20 +207,26 @@ function categoryFor(mime: string, targetIsFloor: boolean): "drawing" | "documen
 function buildMappings(parsed: Parsed[]): Mapping[] {
   // Stable group labels: one per distinct old location/task id, numbered by
   // the earliest upload in that group so the gallery reads chronologically.
+  // Locations get G##, tasks get T## — separate sequences, zero-padded.
   const groupIds = new Map<string, string>()
-  const firstSeen = new Map<string, string>()
-  for (const p of parsed) {
-    if ((p.scope === "location" || p.scope === "task") && p.oldId) {
-      const prev = firstSeen.get(p.oldId)
-      if (!prev || p.lastModified < prev) firstSeen.set(p.oldId, p.lastModified)
+
+  function numberGroups(scope: "location" | "task", prefix: "G" | "T") {
+    const firstSeen = new Map<string, string>()
+    for (const p of parsed) {
+      if (p.scope === scope && p.oldId) {
+        const prev = firstSeen.get(p.oldId)
+        if (!prev || p.lastModified < prev) firstSeen.set(p.oldId, p.lastModified)
+      }
     }
+    ;[...firstSeen.entries()]
+      .sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[0] < b[0] ? -1 : 1))
+      .forEach(([id], i) => {
+        groupIds.set(id, `${prefix}${String(i + 1).padStart(2, "0")}`)
+      })
   }
-  const ordered = [...firstSeen.entries()].sort((a, b) =>
-    a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[0] < b[0] ? -1 : 1
-  )
-  ordered.forEach(([id], i) => {
-    groupIds.set(id, `G${String(i + 1).padStart(2, "0")}`)
-  })
+
+  numberGroups("location", "G")
+  numberGroups("task", "T")
 
   return parsed.map((p): Mapping => {
     const mime = mimeFor(p.ext)
@@ -229,6 +241,7 @@ function buildMappings(parsed: Parsed[]): Mapping[] {
         target: { kind: "floor", level },
         category: categoryFor(mime, true),
         group: null,
+        recoveredName: p.filename,
         note: `old floor ${p.oldId.slice(0, 8)} -> level ${level}`,
       }
     }
@@ -240,6 +253,7 @@ function buildMappings(parsed: Parsed[]): Mapping[] {
         target: { kind: "project" },
         category: categoryFor(mime, false),
         group: null,
+        recoveredName: p.filename,
         note: "floor-scoped, but the old floor UUID is not a known one (level -2/-1/0/7 or a zone) — recovered as a project file unless a level is supplied in EXTRA_FLOOR_TO_LEVEL",
       }
     }
@@ -251,6 +265,7 @@ function buildMappings(parsed: Parsed[]): Mapping[] {
         target: { kind: "project" },
         category: categoryFor(mime, false),
         group: null,
+        recoveredName: p.filename,
         note: "already project-scoped",
       }
     }
@@ -263,6 +278,7 @@ function buildMappings(parsed: Parsed[]): Mapping[] {
         target: { kind: "project" },
         category: categoryFor(mime, false),
         group: g,
+        recoveredName: g ? `[${g}] ${p.filename}` : p.filename,
         note: `old ${p.scope} ${p.oldId.slice(0, 8)} is gone — recovered as a project file, group ${g}`,
       }
     }
@@ -273,6 +289,7 @@ function buildMappings(parsed: Parsed[]): Mapping[] {
       target: { kind: "project" },
       category: categoryFor(mime, false),
       group: null,
+      recoveredName: p.filename,
       note: "UNRECOGNISED key shape — review before approving",
     }
   })

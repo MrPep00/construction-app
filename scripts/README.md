@@ -115,6 +115,33 @@ WHERE l.floor_id = f.id
 
 ---
 
+### `generate-rebuild-B-files.ts` + `rebuild-B-files.sql`
+
+**Purpose:** PHASE C of the post-cascade-delete rebuild. The generator reads the approved mapping from `backups/r2-mapping-dryrun.json` and emits `scripts/rebuild-B-files.sql`, which re-creates the 212 `files` rows pointing at the surviving R2 objects.
+
+**Regenerate:** `pnpm tsx scripts/generate-rebuild-B-files.ts [--project "Budynek A"]`. The generator makes no R2 call and no DB connection — it only reads the JSON and writes the SQL. To reject objects, delete their entries from the JSON and re-run.
+
+**Run the SQL:** Supabase Dashboard → SQL Editor → paste `rebuild-B-files.sql` → Run. Edit the project name on the two `set_config` lines first.
+
+**Safety:** INSERT only, one transaction, `NOT EXISTS` guard on `storage_path` so re-running is a no-op. Pre-flight asserts one matching project, a resolvable uploader (`teams.created_by`) and a real floor for every referenced level; post-insert asserts total / floor-level / project-level counts and the per-level distribution, rolling everything back on mismatch.
+
+**What lands where (212 objects):**
+- 76 floor-level files across levels -2 … 7 (`floor_id` set).
+- 136 project-level files, all targets NULL (migration 022): 129 photos off dead locations, 4 off dead tasks, 3 that were already project-scoped.
+- `files.name` carries a `[G01]`–`[G41]` (location) or `[T01]`–`[T04]` (task) prefix on recovered rows — the only surviving link to the lokal a photo came from. Prefix → old UUID is in `backups/r2-mapping-dryrun.md`.
+- `created_at` is the R2 object's LastModified, so the gallery keeps its real chronology.
+
+**Rollback (if needed):**
+```sql
+DELETE FROM files f
+USING projects p
+WHERE f.project_id = p.id
+  AND p.name = 'Budynek A'
+  AND f.storage_provider = 'r2';
+```
+
+---
+
 ### `check-r2-orphans.ts`
 
 Checks for files in the `files` table that no longer have a corresponding object in Cloudflare R2. Run with `npx tsx scripts/check-r2-orphans.ts`. Added during Module 9 (R2 migration).
